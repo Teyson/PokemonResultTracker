@@ -2,11 +2,20 @@
 node_modules/
 npm-debug.log*
 
+# SvelteKit
+.svelte-kit/
+build/
+
 # Azure Functions local
 api/local.settings.json
+api/dist/
 bin/
 obj/
 .python_packages/
+
+# Drizzle CLI env (SQL_* creds for db:generate/db:migrate — separate from local.settings.json)
+.env
+api/.env
 
 # Editor / OS
 .vscode/

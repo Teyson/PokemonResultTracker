@@ -1,0 +1,310 @@
+<script lang="ts">
+  import { getContext } from 'svelte';
+  import type { ClientPrincipal, Night, NightInput } from '$lib/types';
+  import { avatarUrl } from '$lib/auth';
+  import { api } from '$lib/api';
+  import { toast } from '$lib/toast.svelte';
+  import PokeBall from '$lib/components/PokeBall.svelte';
+  import Scoreboard from '$lib/components/Scoreboard.svelte';
+  import NightForm from '$lib/components/NightForm.svelte';
+  import NightsList from '$lib/components/NightsList.svelte';
+  import DeckTable from '$lib/components/DeckTable.svelte';
+  import Toast from '$lib/components/Toast.svelte';
+
+  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean }>('auth');
+
+  let roles = $derived(auth.principal?.userRoles ?? []);
+  let isMember = $derived(roles.includes('member'));
+  let isAdmin = $derived(roles.includes('admin'));
+
+  let nights = $state<Night[]>([]);
+  let nightsLoaded = $state(false);
+  let editing = $state<Night | null>(null);
+
+  $effect(() => {
+    if (isMember && !nightsLoaded) loadNights();
+  });
+
+  async function loadNights() {
+    try {
+      nights = (await api<Night[]>('/api/nights')) ?? [];
+      nightsLoaded = true;
+    } catch (e) {
+      toast(`Could not load nights: ${(e as Error).message}`, true);
+    }
+  }
+
+  async function handleSave(input: NightInput, editId: string | null) {
+    try {
+      if (editId) {
+        await api(`/api/nights/${encodeURIComponent(editId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(input)
+        });
+      } else {
+        await api('/api/nights', { method: 'POST', body: JSON.stringify(input) });
+      }
+      await loadNights();
+      editing = null;
+      toast(editId ? 'Night updated' : 'Night logged');
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  }
+
+  async function handleDelete(n: Night) {
+    try {
+      await api(`/api/nights/${encodeURIComponent(n.id)}`, { method: 'DELETE' });
+      if (editing?.id === n.id) editing = null;
+      await loadNights();
+      toast('Night deleted');
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  }
+
+  function startEdit(n: Night) {
+    editing = n;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+<svelte:head>
+  <title>Pokémon Result Tracker</title>
+</svelte:head>
+
+{#if !auth.loading}
+  {#if !auth.principal}
+    <div class="gate">
+      <PokeBall size={56} />
+      <h1>Pokémon Result Tracker</h1>
+      <p>A private log for our Pokémon TCG nights. Sign in with GitHub to continue.</p>
+      <a class="biglink" href="/login">Sign in with GitHub</a>
+    </div>
+  {:else if !isMember}
+    <div class="gate">
+      <PokeBall size={56} />
+      <h1>Almost there</h1>
+      <p>
+        You're signed in, but your account isn't on the guest list yet. Send the admin the username below and
+        they'll add you.
+      </p>
+      <div class="me">
+        {#if avatarUrl(auth.principal)}
+          <img class="av" alt="" src={avatarUrl(auth.principal)} />
+        {/if}
+        <b>{auth.principal.userDetails}</b>
+      </div>
+      <div class="row"><a class="biglink ghost" href="/logout">Sign out</a></div>
+    </div>
+  {:else}
+    <div class="wrap">
+      <div class="topbar">
+        <span class="who">
+          {#if avatarUrl(auth.principal)}
+            <img class="av" alt="" src={avatarUrl(auth.principal)} />
+          {/if}
+          <span>{auth.principal.userDetails}</span>
+        </span>
+        {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>{/if}
+        <a class="tlink" href="/logout">Sign out</a>
+      </div>
+
+      <div class="masthead">
+        <PokeBall size={34} />
+        <div>
+          <h1>Pokémon Result Tracker</h1>
+          <div class="sub">casual Pokémon TCG log</div>
+        </div>
+      </div>
+
+      <Scoreboard {nights} />
+      <NightForm {nights} {editing} onSave={handleSave} onCancel={() => (editing = null)} />
+
+      <div class="section-title">Nights</div>
+      <NightsList {nights} onEdit={startEdit} onDelete={handleDelete} />
+
+      <DeckTable {nights} />
+
+      <div class="foot">
+        <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br />
+        Scoring: 3 win · 1 tie · 0 loss &nbsp;·&nbsp; max 3.00 ppg.<br />
+        Everything you log is saved to the shared league database.
+      </div>
+    </div>
+  {/if}
+{/if}
+
+<Toast />
+
+<style>
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 6px;
+    min-height: 22px;
+  }
+  .who {
+    font-size: 11.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .who .av {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--panel2);
+    object-fit: cover;
+  }
+  .tlink {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 4px 10px;
+  }
+  .tlink:hover {
+    color: var(--text);
+    border-color: var(--muted2);
+  }
+  .tlink.admin {
+    color: var(--gold);
+    border-color: rgba(246, 201, 69, 0.35);
+  }
+
+  .masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .masthead h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 22px;
+    margin: 0;
+    line-height: 1;
+  }
+  .masthead .sub {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    margin-top: 3px;
+  }
+
+  .section-title {
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 22px 2px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .foot {
+    color: var(--muted2);
+    font-size: 11px;
+    text-align: center;
+    margin-top: 22px;
+    line-height: 1.6;
+  }
+  .foot b {
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .gate {
+    max-width: 440px;
+    margin: 8vh auto 0;
+    text-align: center;
+    padding: 0 8px;
+  }
+  .gate h1 {
+    font-family: var(--display);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 26px;
+    margin: 18px 0 8px;
+  }
+  .gate p {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 auto 22px;
+    max-width: 340px;
+  }
+  .gate .me {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 22px;
+    font-size: 13px;
+  }
+  .gate .me .av {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+  }
+  .biglink {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(180deg, var(--red) 0%, var(--red-deep) 100%);
+    color: #fff;
+    text-decoration: none;
+    font-family: var(--display);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 14px 26px;
+    border-radius: 11px;
+    font-size: 14px;
+    box-shadow: 0 3px 12px rgba(239, 47, 66, 0.3);
+  }
+  .biglink.ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    box-shadow: none;
+    font-size: 12px;
+    padding: 10px 20px;
+  }
+  .gate .row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 440px) {
+    .masthead h1 {
+      font-size: 19px;
+    }
+  }
+</style>

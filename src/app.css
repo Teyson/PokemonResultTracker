@@ -1,0 +1,64 @@
+/* Shared design tokens, ported from the original index.html / admin.html <style> blocks. */
+:root {
+  --ink: #12141d;
+  --ink2: #171a25;
+  --panel: #1c2030;
+  --panel2: #232840;
+  --line: #2b3048;
+  --text: #e9eaf2;
+  --muted: #8a90a8;
+  --muted2: #5f647d;
+  --red: #ef2f42;
+  --red-deep: #b81f2f;
+  --gold: #f6c945;
+  --win: #4ecb71;
+  --tie: #f6c945;
+  --loss: #ef5a6a;
+  --display: 'Chakra Petch', 'Segoe UI Semibold', system-ui, sans-serif;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(1200px 500px at 50% -200px, #1d2740 0%, transparent 60%), var(--ink);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  padding: 18px 14px 60px;
+}
+
+input[type='date'],
+input[type='text'] {
+  width: 100%;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 11px 11px;
+  font-size: 15px;
+  font-family: inherit;
+}
+input[type='text']::placeholder {
+  color: #565b74;
+}
+input:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239, 47, 66, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

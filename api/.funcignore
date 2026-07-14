@@ -1,0 +1,10 @@
+*.ts
+src
+drizzle
+drizzle.config.ts
+.env
+.env.*
+local.settings.json
+.vscode
+.git*
+test

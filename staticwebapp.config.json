@@ -1,0 +1,17 @@
+{
+  "platform": {
+    "apiRuntime": "node:20"
+  },
+  "auth": {
+    "rolesSource": "/api/GetRoles"
+  },
+  "routes": [
+    { "route": "/login", "redirect": "/.auth/login/github" },
+    { "route": "/logout", "redirect": "/.auth/logout" },
+    { "route": "/api/nights*", "allowedRoles": ["member"] },
+    { "route": "/api/users*", "allowedRoles": ["admin"] }
+  ],
+  "globalHeaders": {
+    "cache-control": "no-store"
+  }
+}

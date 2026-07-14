@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pokémon Result Tracker · Members</title>
+<style>
+  :root{
+    --ink:#12141d; --ink2:#171a25; --panel:#1c2030; --panel2:#232840; --line:#2b3048;
+    --text:#e9eaf2; --muted:#8a90a8; --muted2:#5f647d;
+    --red:#ef2f42; --red-deep:#b81f2f; --gold:#f6c945; --win:#4ecb71;
+    --display:'Chakra Petch','Segoe UI Semibold',system-ui,sans-serif;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 500px at 50% -200px,#1d2740 0%,transparent 60%),var(--ink);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;padding:18px 14px 60px;}
+  .wrap{max-width:560px;margin:0 auto;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;}
+  .back{font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:20px;padding:6px 12px;}
+  .back:hover{color:var(--text);border-color:var(--muted2);}
+  h1{font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-size:20px;margin:0 0 4px;}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:20px;line-height:1.5;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;margin-bottom:16px;}
+  .add{display:flex;gap:10px;}
+  .add input{flex:1;min-width:0;background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:11px 12px;font-size:15px;font-family:inherit;}
+  .add input::placeholder{color:#565b74;}
+  .add input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(239,47,66,.16);}
+  .add button{flex:0 0 auto;border:none;border-radius:9px;padding:0 20px;font-family:var(--display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;cursor:pointer;background:linear-gradient(180deg,var(--red) 0%,var(--red-deep) 100%);color:#fff;}
+  .add button:disabled{opacity:.55;cursor:default;}
+  .hint{font-size:11px;color:var(--muted2);margin-top:9px;line-height:1.5;}
+  .section-title{font-family:var(--display);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:20px 2px 10px;display:flex;align-items:center;gap:9px;}
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line);}
+  .urow{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:8px;}
+  .urow .av{width:30px;height:30px;border-radius:50%;background:var(--panel2);flex:0 0 auto;object-fit:cover;}
+  .urow .who{flex:1;min-width:0;}
+  .urow .login{font-weight:600;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .urow .meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .pill{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:3px 9px;border-radius:20px;flex:0 0 auto;}
+  .pill.admin{color:var(--gold);background:rgba(246,201,69,.12);border:1px solid rgba(246,201,69,.3);}
+  .pill.member{color:var(--win);background:rgba(78,203,113,.1);border:1px solid rgba(78,203,113,.28);}
+  .urow .rm{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:14px;}
+  .urow .rm:active{background:var(--red-deep);color:#fff;}
+  .urow .rm:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:18px;}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .toast.err{border-color:var(--red);color:#ffd7db;}
+  .denied{max-width:400px;margin:12vh auto 0;text-align:center;}
+  .denied h1{margin-bottom:10px;}
+  .denied p{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:22px;}
+  .denied a{display:inline-block;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:11px 22px;font-size:13px;}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+
+<div class="denied" id="denied" hidden>
+  <h1>Members only</h1>
+  <p>This page is for the league admin. If that should be you, ask to be granted the admin role.</p>
+  <a href="/index.html">← Back to the tracker</a>
+</div>
+
+<div class="wrap" id="panel" hidden>
+  <div class="topbar">
+    <a class="back" href="/index.html">← Tracker</a>
+    <a class="back" href="/logout">Sign out</a>
+  </div>
+  <h1>League members</h1>
+  <div class="sub">Whitelist who can sign in and log nights. People sign in with GitHub first, then you add their username here — they get access the next time they load the page.</div>
+
+  <div class="card">
+    <div class="add">
+      <input type="text" id="loginInput" placeholder="GitHub username" autocomplete="off" spellcheck="false">
+      <button id="addBtn">Add</button>
+    </div>
+    <div class="hint">Enter their exact GitHub username (the handle in github.com/<b>username</b>). Case doesn't matter.</div>
+  </div>
+
+  <div class="section-title">People with access</div>
+  <div id="list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let toastTimer=null;
+function toast(msg,isErr){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(isErr?' err':'');clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.className='toast'+(isErr?' err':'');},2600);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function api(path,opts={}){
+  const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok){let m='';try{m=(await r.json()).error||'';}catch(e){}throw new Error(m||('Request failed ('+r.status+')'));}
+  return r.status===204?null:r.json();
+}
+
+let data={admin:'',users:[]};
+function avatarUrl(login){return 'https://github.com/'+encodeURIComponent(login)+'.png?size=60';}
+function render(){
+  const list=document.getElementById('list');
+  const rows=[];
+  if(data.admin){
+    rows.push(`<div class="urow">
+      <img class="av" alt="" src="${avatarUrl(data.admin)}" onerror="this.style.visibility='hidden'">
+      <div class="who"><div class="login">${esc(data.admin)}</div><div class="meta">league admin (you)</div></div>
+      <span class="pill admin">Admin</span>
+      <button class="rm" disabled title="The admin can't be removed here" style="opacity:.3;cursor:default">✕</button>
+    </div>`);
+  }
+  data.users.filter(u=>u.role!=='admin'||u.github_login.toLowerCase()!==data.admin.toLowerCase()).forEach(u=>{
+    if(u.github_login.toLowerCase()===data.admin.toLowerCase())return;
+    rows.push(`<div class="urow">
+      <img class="av" alt="" src="${avatarUrl(u.github_login)}" onerror="this.style.visibility='hidden'">
+      <div class="who"><div class="login">${esc(u.github_login)}</div><div class="meta">added ${esc((u.created_at||'').slice(0,10))}</div></div>
+      <span class="pill member">Member</span>
+      <button class="rm" data-id="${u.id}" data-login="${esc(u.github_login)}" title="Remove" aria-label="Remove ${esc(u.github_login)}">✕</button>
+    </div>`);
+  });
+  list.innerHTML=rows.length?rows.join(''):'<div class="empty">No members added yet.</div>';
+}
+async function reload(){data=await api('/api/users');render();}
+
+async function addUser(){
+  const input=document.getElementById('loginInput'),btn=document.getElementById('addBtn');
+  const login=input.value.trim();
+  if(!login){input.focus();return;}
+  btn.disabled=true;
+  try{await api('/api/users',{method:'POST',body:JSON.stringify({github_login:login})});input.value='';await reload();toast('Added '+login);}
+  catch(e){toast(e.message,true);}
+  finally{btn.disabled=false;input.focus();}
+}
+
+(async function init(){
+  let cp=null;
+  try{cp=(await (await fetch('/.auth/me')).json()).clientPrincipal;}catch(e){}
+  if(!cp||!(cp.userRoles||[]).includes('admin')){document.getElementById('denied').hidden=false;return;}
+  document.getElementById('panel').hidden=false;
+  document.getElementById('addBtn').addEventListener('click',addUser);
+  document.getElementById('loginInput').addEventListener('keydown',e=>{if(e.key==='Enter')addUser();});
+  document.getElementById('list').addEventListener('click',async e=>{
+    const rm=e.target.closest('[data-id]');if(!rm)return;
+    if(confirm('Remove '+rm.dataset.login+' from the league?')){
+      try{await api('/api/users/'+encodeURIComponent(rm.dataset.id),{method:'DELETE'});await reload();toast('Removed '+rm.dataset.login);}
+      catch(err){toast(err.message,true);}
+    }
+  });
+  try{await reload();}catch(e){toast('Could not load members: '+e.message,true);}
+})();
+</script>
+</body>
+</html>

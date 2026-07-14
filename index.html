@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pokémon Result Tracker</title>
+<style>
+  :root{
+    --ink:#12141d; --ink2:#171a25; --panel:#1c2030; --panel2:#232840; --line:#2b3048;
+    --text:#e9eaf2; --muted:#8a90a8; --muted2:#5f647d;
+    --red:#ef2f42; --red-deep:#b81f2f; --gold:#f6c945;
+    --win:#4ecb71; --tie:#f6c945; --loss:#ef5a6a;
+    --display:'Chakra Petch','Segoe UI Semibold',system-ui,sans-serif;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 500px at 50% -200px, #1d2740 0%, transparent 60%), var(--ink);
+    color:var(--text); font-family:var(--sans); -webkit-font-smoothing:antialiased;
+    min-height:100vh; padding:18px 14px 60px;
+  }
+  .wrap{max-width:680px;margin:0 auto;}
+
+  /* ---------- top bar ---------- */
+  .topbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:6px;min-height:22px;}
+  .who{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px;}
+  .who .av{width:18px;height:18px;border-radius:50%;background:var(--panel2);object-fit:cover;}
+  .tlink{font-size:11px;letter-spacing:.05em;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:20px;padding:4px 10px;}
+  .tlink:hover{color:var(--text);border-color:var(--muted2);}
+  .tlink.admin{color:var(--gold);border-color:rgba(246,201,69,.35);}
+
+  /* ---------- header ---------- */
+  .masthead{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .ball{width:34px;height:34px;flex:0 0 auto;filter:drop-shadow(0 2px 6px rgba(239,47,66,.4));}
+  .masthead h1{font-family:var(--display);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:22px;margin:0;line-height:1;}
+  .masthead .sub{color:var(--muted);font-size:12px;letter-spacing:.04em;margin-top:3px;}
+
+  /* ---------- scoreboard ---------- */
+  .board{background:linear-gradient(180deg,var(--panel) 0%,var(--ink2) 100%);border:1px solid var(--line);border-radius:16px;padding:18px 16px 16px;margin-bottom:14px;position:relative;overflow:hidden;}
+  .board::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.035) 1px, transparent 1px);background-size:14px 14px;pointer-events:none;}
+  .board-label{font-family:var(--display);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;position:relative;}
+  .wtl{display:flex;gap:10px;position:relative;}
+  .wtl .cell{flex:1;text-align:center;background:rgba(0,0,0,.22);border-radius:11px;padding:11px 4px 9px;border:1px solid var(--line);}
+  .wtl .num{font-family:var(--display);font-weight:700;font-size:34px;line-height:1;letter-spacing:.02em;font-variant-numeric:tabular-nums;}
+  .wtl .tag{font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-top:6px;color:var(--muted);}
+  .wtl .w .num{color:var(--win);} .wtl .t .num{color:var(--tie);} .wtl .l .num{color:var(--loss);}
+  .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px;position:relative;}
+  .readout{background:rgba(0,0,0,.18);border:1px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center;}
+  .readout .v{font-family:var(--display);font-weight:600;font-size:20px;line-height:1;font-variant-numeric:tabular-nums;}
+  .readout .v.hero{color:var(--gold);}
+  .readout .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:6px;}
+  .trend{margin-top:14px;position:relative;}
+  .trend-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .trend-head .t{font-family:var(--display);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);}
+  .trend-head .avg{font-size:11px;color:var(--muted);}
+  .trend-head .avg b{color:var(--gold);font-family:var(--display);}
+  .chart-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+
+  .section-title{font-family:var(--display);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:22px 2px 10px;display:flex;align-items:center;gap:9px;}
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;}
+  .form-row{display:flex;gap:10px;margin-bottom:11px;}
+  .field{flex:1;min-width:0;}
+  .field label{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  input[type=date],input[type=text]{width:100%;background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:11px 11px;font-size:15px;font-family:inherit;}
+  input[type=text]::placeholder{color:#565b74;}
+  input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(239,47,66,.16);}
+  .swatches{display:flex;flex-wrap:wrap;gap:7px;}
+  .sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;position:relative;transition:transform .08s;}
+  .sw:active{transform:scale(.9);}
+  .sw:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
+  .sw[aria-pressed="true"]{border-color:var(--text);box-shadow:0 0 0 2px var(--ink),0 0 0 4px currentColor;}
+  .deckchips{display:flex;flex-wrap:wrap;gap:7px;}
+  .dchip{display:flex;align-items:center;gap:7px;background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:22px;padding:9px 14px;font-size:13.5px;cursor:pointer;font-family:inherit;transition:transform .07s;}
+  .dchip:active{transform:scale(.96);}
+  .dchip:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+  .dchip .cd{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .dchip[aria-pressed="true"]{border-color:var(--red);background:rgba(239,47,66,.13);box-shadow:0 0 0 2px rgba(239,47,66,.2);}
+  .dchip.new{border-style:dashed;color:var(--muted);}
+  .dchip.new[aria-pressed="true"]{border-color:var(--gold);color:var(--gold);background:rgba(246,201,69,.1);box-shadow:none;}
+  .rec-row{display:flex;gap:10px;margin-bottom:13px;}
+  .stepper{flex:1;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;}
+  .stepper .lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .stepper.w .lab{color:var(--win);} .stepper.t .lab{color:var(--tie);} .stepper.l .lab{color:var(--loss);}
+  .stepper .ctl{display:flex;align-items:center;justify-content:space-between;gap:4px;}
+  .stepper button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:19px;line-height:1;cursor:pointer;font-family:var(--display);}
+  .stepper button:active{background:var(--red-deep);}
+  .stepper button:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
+  .stepper .val{font-family:var(--display);font-weight:700;font-size:22px;min-width:24px;font-variant-numeric:tabular-nums;}
+  .actions{display:flex;gap:10px;}
+  .btn{flex:1;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;}
+  .btn.primary{background:linear-gradient(180deg,var(--red) 0%,var(--red-deep) 100%);color:#fff;box-shadow:0 3px 10px rgba(239,47,66,.3);}
+  .btn.primary:active{transform:translateY(1px);}
+  .btn.primary:disabled{opacity:.55;cursor:default;box-shadow:none;}
+  .btn.ghost{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--muted);}
+  .btn:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
+
+  .night{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px 12px 0;margin-bottom:9px;overflow:hidden;position:relative;}
+  .spine{width:5px;align-self:stretch;flex:0 0 auto;border-radius:0 3px 3px 0;}
+  .night .body{flex:1;min-width:0;}
+  .night .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .night .deck{font-weight:600;font-size:15px;}
+  .chip{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:20px;font-weight:600;}
+  .night .date{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:7px;}
+  .night .stats{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
+  .night .record{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums;}
+  .night .record .s{color:var(--muted2);margin:0 1px;}
+  .night .ppg{text-align:right;}
+  .night .ppg .v{font-family:var(--display);font-weight:600;font-size:16px;color:var(--gold);font-variant-numeric:tabular-nums;}
+  .night .ppg .k{font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+  .rowbtns{display:flex;flex-direction:column;gap:5px;flex:0 0 auto;}
+  .rowbtns button{width:30px;height:26px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;}
+  .rowbtns button:active{background:var(--panel2);}
+  .rowbtns button.del:active{background:var(--red-deep);color:#fff;}
+  .rowbtns button:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
+
+  .decktable{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .drow{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line);}
+  .drow:last-child{border-bottom:none;}
+  .drow.head{background:rgba(0,0,0,.2);}
+  .drow.head span{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);}
+  .drow .dname{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;min-width:0;}
+  .drow .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .drow .dname span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .drow .mono{font-family:var(--display);font-weight:600;font-size:14px;text-align:right;min-width:52px;font-variant-numeric:tabular-nums;}
+  .drow .mono.gold{color:var(--gold);}
+
+  .empty{text-align:center;color:var(--muted);padding:26px 16px;font-size:13.5px;line-height:1.6;}
+  .foot{color:var(--muted2);font-size:11px;text-align:center;margin-top:22px;line-height:1.6;}
+  .foot b{color:var(--gold);font-weight:600;}
+
+  /* ---------- gate (login / pending) ---------- */
+  .gate{max-width:440px;margin:8vh auto 0;text-align:center;padding:0 8px;}
+  .gate .ball{width:56px;height:56px;margin-bottom:18px;}
+  .gate h1{font-family:var(--display);letter-spacing:.14em;text-transform:uppercase;font-size:26px;margin:0 0 8px;}
+  .gate p{color:var(--muted);font-size:14px;line-height:1.6;margin:0 auto 22px;max-width:340px;}
+  .gate .me{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 14px;display:inline-flex;align-items:center;gap:9px;margin-bottom:22px;font-size:13px;}
+  .gate .me .av{width:22px;height:22px;border-radius:50%;}
+  .biglink{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(180deg,var(--red) 0%,var(--red-deep) 100%);color:#fff;text-decoration:none;font-family:var(--display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:14px 26px;border-radius:11px;font-size:14px;box-shadow:0 3px 12px rgba(239,47,66,.3);}
+  .biglink.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);box-shadow:none;font-size:12px;padding:10px 20px;}
+  .gate .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .toast.err{border-color:var(--red);color:#ffd7db;}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
+  @media (max-width:440px){.night{gap:9px;} .night .stats{gap:10px;} .masthead h1{font-size:19px;}}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN GATE ===================== -->
+<div class="gate" id="gateLogin" hidden>
+  <svg class="ball" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="46" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+    <path d="M4 50a46 46 0 0 1 92 0Z" fill="#ef2f42"/>
+    <rect x="4" y="46" width="92" height="8" fill="#0d0f16"/>
+    <circle cx="50" cy="50" r="14" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+    <circle cx="50" cy="50" r="5" fill="#0d0f16"/>
+  </svg>
+  <h1>Pokémon Result Tracker</h1>
+  <p>A private log for our Pokémon TCG nights. Sign in with GitHub to continue.</p>
+  <a class="biglink" href="/login">Sign in with GitHub</a>
+</div>
+
+<!-- ===================== PENDING (not whitelisted) ===================== -->
+<div class="gate" id="gatePending" hidden>
+  <svg class="ball" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="46" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+    <path d="M4 50a46 46 0 0 1 92 0Z" fill="#ef2f42"/>
+    <rect x="4" y="46" width="92" height="8" fill="#0d0f16"/>
+    <circle cx="50" cy="50" r="14" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+    <circle cx="50" cy="50" r="5" fill="#0d0f16"/>
+  </svg>
+  <h1>Almost there</h1>
+  <p>You're signed in, but your account isn't on the guest list yet. Send the admin the username below and they'll add you.</p>
+  <div class="me"><img class="av" id="pendAv" alt="" src=""><b id="pendName">—</b></div>
+  <div class="row">
+    <a class="biglink ghost" href="/logout">Sign out</a>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div class="wrap" id="app" hidden>
+  <div class="topbar">
+    <span class="who"><img class="av" id="meAv" alt="" src=""><span id="meName">—</span></span>
+    <a class="tlink admin" id="adminLink" href="/admin.html" hidden>Manage users</a>
+    <a class="tlink" href="/logout">Sign out</a>
+  </div>
+
+  <div class="masthead">
+    <svg class="ball" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+      <path d="M4 50a46 46 0 0 1 92 0Z" fill="#ef2f42"/>
+      <rect x="4" y="46" width="92" height="8" fill="#0d0f16"/>
+      <circle cx="50" cy="50" r="14" fill="#fff" stroke="#0d0f16" stroke-width="6"/>
+      <circle cx="50" cy="50" r="5" fill="#0d0f16"/>
+    </svg>
+    <div>
+      <h1>Pokémon Result Tracker</h1>
+      <div class="sub">casual Pokémon TCG log</div>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="board-label">Season record</div>
+    <div class="wtl">
+      <div class="cell w"><div class="num" id="sumW">0</div><div class="tag">Wins</div></div>
+      <div class="cell t"><div class="num" id="sumT">0</div><div class="tag">Ties</div></div>
+      <div class="cell l"><div class="num" id="sumL">0</div><div class="tag">Losses</div></div>
+    </div>
+    <div class="readouts">
+      <div class="readout"><div class="v" id="sumGames">0</div><div class="k">Games</div></div>
+      <div class="readout"><div class="v hero" id="sumPts">0</div><div class="k">Points</div></div>
+      <div class="readout"><div class="v hero" id="sumPPG">—</div><div class="k">Pts / game</div></div>
+    </div>
+    <div class="trend" id="trendBox" hidden>
+      <div class="trend-head">
+        <span class="t">Pts / game by night</span>
+        <span class="avg">avg <b id="avgPPG">—</b></span>
+      </div>
+      <div class="chart-scroll"><div id="chart"></div></div>
+    </div>
+  </div>
+
+  <div class="section-title" id="formTitle">Log a night</div>
+  <div class="card">
+    <div class="form-row">
+      <div class="field"><label>Date</label><input type="date" id="fDate"></div>
+    </div>
+    <div class="field" style="margin-bottom:13px;">
+      <label>Deck</label>
+      <div class="deckchips" id="deckChips"></div>
+      <input type="text" id="fDeck" placeholder="New deck name" autocomplete="off" hidden style="margin-top:9px;">
+    </div>
+    <div class="field" id="typeField" style="margin-bottom:13px;">
+      <label>Type</label>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="rec-row">
+      <div class="stepper w"><div class="lab">Wins</div><div class="ctl"><button data-step="w" data-d="-1">−</button><span class="val" id="vW">0</span><button data-step="w" data-d="1">+</button></div></div>
+      <div class="stepper t"><div class="lab">Ties</div><div class="ctl"><button data-step="t" data-d="-1">−</button><span class="val" id="vT">0</span><button data-step="t" data-d="1">+</button></div></div>
+      <div class="stepper l"><div class="lab">Losses</div><div class="ctl"><button data-step="l" data-d="-1">−</button><span class="val" id="vL">0</span><button data-step="l" data-d="1">+</button></div></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="saveBtn">Log night</button>
+      <button class="btn ghost" id="cancelBtn" hidden>Cancel</button>
+    </div>
+  </div>
+
+  <div class="section-title">Nights</div>
+  <div id="nights"></div>
+
+  <div class="section-title" id="deckTitle" hidden>By deck</div>
+  <div class="decktable" id="deckTable" hidden></div>
+
+  <div class="foot">
+    <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br>
+    Scoring: 3 win · 1 tie · 0 loss &nbsp;·&nbsp; max 3.00 ppg.<br>
+    Everything you log is saved to the shared league database.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   Pokémon Result Tracker — database-backed frontend.
+   Data lives in Azure SQL, reached through the /api functions:
+     GET    /api/nights          -> [{id,date,deck,type,w,t,l,notes}]
+     POST   /api/nights          -> create (body: {date,deck,type,w,t,l})
+     PUT    /api/nights/{id}      -> update
+     DELETE /api/nights/{id}      -> delete
+   Access is gated by Static Web Apps auth (see /.auth/me). Only users the
+   admin has whitelisted get the "member" role and can read/write.
+   ===================================================================== */
+
+const TYPES=[
+  ['Grass','#63bc5a'],['Fire','#ff9c54'],['Water','#4f92d6'],['Lightning','#f6c945'],
+  ['Psychic','#a86fd4'],['Fighting','#cd7137'],['Darkness','#525873'],['Metal','#a8a9b4'],
+  ['Dragon','#b79b3f'],['Fairy','#ec8fd0'],['Colorless','#c4c4bc']
+];
+const colorOf = t => (TYPES.find(x=>x[0]===t)||['Colorless','#c4c4bc'])[1];
+
+let state={nights:[]};
+let form={w:0,t:0,l:0,type:'Psychic',editId:null,deck:'',newDeck:false};
+
+/* ---- date helpers (local, no TZ drift) ---- */
+function pad(n){return String(n).padStart(2,'0');}
+function toISO(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function recentTuesday(){const d=new Date();const diff=(d.getDay()-2+7)%7;d.setDate(d.getDate()-diff);return toISO(d);}
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(iso){const[y,m,dd]=iso.split('-').map(Number);return MON[m-1]+' '+dd+', '+y;}
+function fmtShort(iso){const[,m,dd]=iso.split('-').map(Number);return m+'/'+dd;}
+
+/* ---- derived ---- */
+const pts=n=>n.w*3+n.t;
+const games=n=>n.w+n.t+n.l;
+const ppg=n=>{const g=games(n);return g?pts(n)/g:0;};
+
+/* ---- tiny helpers ---- */
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let toastTimer=null;
+function toast(msg,isErr){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast show'+(isErr?' err':'');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.className='toast'+(isErr?' err':'');},2600);
+}
+
+/* ---- API ---- */
+async function api(path,opts={}){
+  const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok){let m='';try{m=(await r.json()).error||'';}catch(e){}throw new Error(m||('Request failed ('+r.status+')'));}
+  return r.status===204?null:r.json();
+}
+async function loadNights(){ state.nights=await api('/api/nights'); }
+
+/* ---- render ---- */
+function render(){
+  const tot=state.nights.reduce((a,n)=>({w:a.w+n.w,t:a.t+n.t,l:a.l+n.l}),{w:0,t:0,l:0});
+  const g=tot.w+tot.t+tot.l, P=tot.w*3+tot.t;
+  document.getElementById('sumW').textContent=tot.w;
+  document.getElementById('sumT').textContent=tot.t;
+  document.getElementById('sumL').textContent=tot.l;
+  document.getElementById('sumGames').textContent=g;
+  document.getElementById('sumPts').textContent=P;
+  document.getElementById('sumPPG').textContent=g?(P/g).toFixed(2):'—';
+  renderChart(g,P);renderNights();renderDecks();
+}
+function renderChart(g,P){
+  const box=document.getElementById('trendBox');
+  const chrono=[...state.nights].reverse();
+  if(chrono.length<2){box.hidden=true;return;}
+  box.hidden=false;
+  document.getElementById('avgPPG').textContent=g?(P/g).toFixed(2):'—';
+  const bw=34,gap=10,h=88,top=6;
+  const w=chrono.length*(bw+gap)-gap+8;
+  let bars='';
+  chrono.forEach((n,i)=>{
+    const v=ppg(n),bh=Math.max(3,(v/3)*(h-top-16));
+    const x=4+i*(bw+gap),y=top+(h-top-16-bh),c=colorOf(n.type);
+    bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="4" fill="${c}" opacity="0.92"/>`;
+    bars+=`<text x="${x+bw/2}" y="${y-4}" text-anchor="middle" fill="#c9cce0" font-size="9" font-family="'Chakra Petch',sans-serif" font-weight="600">${v.toFixed(1)}</text>`;
+    bars+=`<text x="${x+bw/2}" y="${h}" text-anchor="middle" fill="#767c96" font-size="9">${fmtShort(n.date)}</text>`;
+  });
+  const avgY=top+(h-top-16)*(1-(g?(P/g)/3:0));
+  const avgLine=g?`<line x1="0" y1="${avgY}" x2="${w}" y2="${avgY}" stroke="#f6c945" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>`:'';
+  document.getElementById('chart').innerHTML=`<svg width="${w}" height="${h+4}" viewBox="0 0 ${w} ${h+4}">${avgLine}${bars}</svg>`;
+}
+function renderNights(){
+  const wrap=document.getElementById('nights');
+  if(!state.nights.length){wrap.innerHTML='<div class="card empty">No nights logged yet.<br>Fill in above and hit <b>Log night</b>.</div>';return;}
+  wrap.innerHTML=state.nights.map(n=>{
+    const c=colorOf(n.type);
+    return `<div class="night">
+      <div class="spine" style="background:${c}"></div>
+      <div class="body">
+        <div class="top"><span class="deck">${esc(n.deck)}</span><span class="chip" style="background:${c}22;color:${c}">${esc(n.type)}</span></div>
+        <div class="date">${fmtDate(n.date)}</div>
+      </div>
+      <div class="stats">
+        <div class="record">${n.w}<span class="s">–</span>${n.t}<span class="s">–</span>${n.l}</div>
+        <div class="ppg"><div class="v">${ppg(n).toFixed(2)}</div><div class="k">${pts(n)} pts</div></div>
+        <div class="rowbtns">
+          <button data-edit="${n.id}" title="Edit" aria-label="Edit night">✎</button>
+          <button class="del" data-del="${n.id}" title="Delete" aria-label="Delete night">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderDecks(){
+  const t=document.getElementById('deckTable'),title=document.getElementById('deckTitle');
+  const map={};
+  state.nights.forEach(n=>{const k=n.deck.trim().toLowerCase();if(!map[k])map[k]={deck:n.deck,type:n.type,w:0,t:0,l:0,nights:0};map[k].w+=n.w;map[k].t+=n.t;map[k].l+=n.l;map[k].nights++;});
+  const decks=Object.values(map);
+  if(decks.length<2){t.hidden=true;title.hidden=true;return;}
+  t.hidden=false;title.hidden=false;
+  decks.sort((a,b)=>{const ga=a.w+a.t+a.l,gb=b.w+b.t+b.l;return (b.w*3+b.t)/(gb||1)-(a.w*3+a.t)/(ga||1);});
+  let rows='<div class="drow head"><span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span></div>';
+  decks.forEach(d=>{const gg=d.w+d.t+d.l,pp=d.w*3+d.t;
+    rows+=`<div class="drow"><div class="dname"><span class="dot" style="background:${colorOf(d.type)}"></span><span>${esc(d.deck)}</span></div><div class="mono">${d.w}-${d.t}-${d.l}</div><div class="mono">${pp}</div><div class="mono gold">${gg?(pp/gg).toFixed(2):'—'}</div></div>`;
+  });
+  t.innerHTML=rows;
+}
+
+/* ---- form ---- */
+function renderSwatches(){
+  document.getElementById('swatches').innerHTML=TYPES.map(([name,col])=>
+    `<button class="sw" style="color:${col};background:${col}" data-type="${name}" aria-pressed="${form.type===name}" title="${name}"></button>`).join('');
+}
+function deckRegistry(){
+  const map={};
+  state.nights.forEach(n=>{const k=n.deck.trim().toLowerCase();if(!map[k])map[k]={name:n.deck,type:n.type};});
+  return Object.values(map);
+}
+function renderDeckChips(){
+  const decks=deckRegistry();
+  let html=decks.map(d=>`<button class="dchip" data-deck="${esc(d.name)}" aria-pressed="${!form.newDeck&&form.deck===d.name}"><span class="cd" style="background:${colorOf(d.type)}"></span>${esc(d.name)}</button>`).join('');
+  html+=`<button class="dchip new" data-new="1" aria-pressed="${form.newDeck}">+ New deck</button>`;
+  document.getElementById('deckChips').innerHTML=html;
+}
+function updateDeckUI(){renderDeckChips();document.getElementById('fDeck').hidden=!form.newDeck;document.getElementById('typeField').hidden=!form.newDeck;renderSwatches();}
+function syncForm(){document.getElementById('vW').textContent=form.w;document.getElementById('vT').textContent=form.t;document.getElementById('vL').textContent=form.l;renderSwatches();}
+function resetForm(){
+  const decks=deckRegistry();
+  form={w:0,t:0,l:0,editId:null,deck:decks[0]?decks[0].name:'',type:decks[0]?decks[0].type:'Psychic',newDeck:decks.length===0};
+  document.getElementById('fDate').value=recentTuesday();
+  document.getElementById('fDeck').value='';
+  document.getElementById('saveBtn').textContent='Log night';
+  document.getElementById('formTitle').textContent='Log a night';
+  document.getElementById('cancelBtn').hidden=true;
+  syncForm();updateDeckUI();
+}
+function loadForEdit(id){
+  const n=state.nights.find(x=>x.id===id);if(!n)return;
+  form={w:n.w,t:n.t,l:n.l,type:n.type,editId:id,deck:n.deck,newDeck:false};
+  document.getElementById('fDate').value=n.date;
+  document.getElementById('fDeck').value='';
+  document.getElementById('saveBtn').textContent='Save changes';
+  document.getElementById('formTitle').textContent='Edit night';
+  document.getElementById('cancelBtn').hidden=false;
+  syncForm();updateDeckUI();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+async function save(){
+  const btn=document.getElementById('saveBtn');
+  const date=document.getElementById('fDate').value||recentTuesday();
+  const deck=(form.newDeck?document.getElementById('fDeck').value.trim():form.deck)||'Untitled deck';
+  const payload={date,deck,type:form.type,w:form.w,t:form.t,l:form.l};
+  btn.disabled=true;
+  try{
+    if(form.editId) await api('/api/nights/'+encodeURIComponent(form.editId),{method:'PUT',body:JSON.stringify(payload)});
+    else await api('/api/nights',{method:'POST',body:JSON.stringify(payload)});
+    await loadNights();resetForm();render();
+    toast(form.editId?'Night updated':'Night logged');
+  }catch(e){toast(e.message,true);}
+  finally{btn.disabled=false;}
+}
+
+/* ---- events ---- */
+function wireEvents(){
+  document.getElementById('swatches').addEventListener('click',e=>{const b=e.target.closest('[data-type]');if(!b)return;form.type=b.dataset.type;renderSwatches();});
+  document.getElementById('deckChips').addEventListener('click',e=>{
+    const nw=e.target.closest('[data-new]'),dk=e.target.closest('[data-deck]');
+    if(nw){form.newDeck=true;form.deck='';document.getElementById('fDeck').value='';updateDeckUI();document.getElementById('fDeck').focus();return;}
+    if(dk){const name=dk.dataset.deck,d=deckRegistry().find(x=>x.name===name);form.newDeck=false;form.deck=name;if(d)form.type=d.type;updateDeckUI();}
+  });
+  document.querySelectorAll('.stepper button').forEach(btn=>{btn.addEventListener('click',()=>{const k=btn.dataset.step,d=+btn.dataset.d;form[k]=Math.max(0,form[k]+d);syncForm();});});
+  document.getElementById('saveBtn').addEventListener('click',save);
+  document.getElementById('cancelBtn').addEventListener('click',resetForm);
+  document.getElementById('nights').addEventListener('click',async e=>{
+    const ed=e.target.closest('[data-edit]'),del=e.target.closest('[data-del]');
+    if(ed)loadForEdit(ed.dataset.edit);
+    if(del){
+      const n=state.nights.find(x=>x.id===del.dataset.del);
+      if(n&&confirm(`Delete ${n.deck} — ${fmtDate(n.date)}?`)){
+        try{await api('/api/nights/'+encodeURIComponent(del.dataset.del),{method:'DELETE'});
+          if(form.editId===del.dataset.del)resetForm();
+          await loadNights();render();toast('Night deleted');
+        }catch(err){toast(err.message,true);}
+      }
+    }
+  });
+}
+
+/* ---- auth gate + init ---- */
+function show(id){['gateLogin','gatePending','app'].forEach(x=>document.getElementById(x).hidden=(x!==id));}
+function setAvatar(imgEl,principal){
+  const claims=(principal&&principal.claims)||[];
+  const avatar=claims.find(c=>/avatar_url|picture|urn:github:avatar/i.test(c.typ||''));
+  const login=principal&&principal.userDetails;
+  const url=(avatar&&avatar.val)||(login?('https://github.com/'+encodeURIComponent(login)+'.png?size=48'):'');
+  if(url){imgEl.src=url;imgEl.style.display='';imgEl.onerror=()=>{imgEl.style.display='none';};}
+  else{imgEl.style.display='none';}
+}
+(async function init(){
+  let cp=null;
+  try{cp=(await (await fetch('/.auth/me')).json()).clientPrincipal;}catch(e){}
+  if(!cp){show('gateLogin');return;}
+  const roles=cp.userRoles||[];
+  const name=cp.userDetails||'you';
+  if(!roles.includes('member')){
+    document.getElementById('pendName').textContent=name;
+    setAvatar(document.getElementById('pendAv'),cp);
+    show('gatePending');return;
+  }
+  document.getElementById('meName').textContent=name;
+  setAvatar(document.getElementById('meAv'),cp);
+  if(roles.includes('admin'))document.getElementById('adminLink').hidden=false;
+  show('app');
+  wireEvents();
+  try{await loadNights();}catch(e){toast('Could not load nights: '+e.message,true);}
+  resetForm();render();
+})();
+</script>
+</body>
+</html>

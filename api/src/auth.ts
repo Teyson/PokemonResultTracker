@@ -15,7 +15,11 @@ export function getUser(request: HttpRequest): ClientPrincipal | null {
   const header = request.headers.get('x-ms-client-principal');
   if (!header) return null;
   try {
-    return JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
+    const parsed = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
+    if (!parsed?.userId) return null;
+    // userDetails is guaranteed by the real GitHub provider, but the local SWA
+    // CLI emulator sometimes omits it — normalize so callers never see undefined.
+    return { ...parsed, userDetails: parsed.userDetails ?? '' };
   } catch {
     return null;
   }
@@ -44,7 +48,7 @@ export interface Role {
  * isolated so a directory write failure never denies access.
  */
 export async function resolveRole(db: Db, userId: string, userDetailsRaw: string, context?: InvocationContext): Promise<Role> {
-  const login = userDetailsRaw.trim().toLowerCase();
+  const login = (userDetailsRaw ?? '').trim().toLowerCase();
 
   const adminUserId = (process.env.ADMIN_USER_ID ?? '').trim();
   const adminLogin = (process.env.ADMIN_GITHUB_LOGIN ?? '').trim().toLowerCase();

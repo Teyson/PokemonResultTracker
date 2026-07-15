@@ -281,16 +281,23 @@ correctly through the CLI's emulated GitHub login at `/.auth/login/github`.
 > the CLI's config schema validator incorrectly requires `auth.identityProviders`
 > even for the built-in GitHub login this app uses (Microsoft's own docs confirm
 > the built-in provider needs no extra registration — this is a CLI bug, not a
-> problem with `staticwebapp.config.json`). Two effects, **local only, does not
+> problem with `staticwebapp.config.json`). One effect, **local only, does not
 > affect the real Azure deployment**:
-> 1. The emulated login form doesn't carry the username through to
->    `/.auth/me`, so you can't fully drive the **member**/**admin** views by
->    logging in through the browser — worked around below with a dev-only login bar.
-> 2. `allowedRoles` on `/api/*` isn't enforced locally — `/api/nights`/`/api/users`
->    are reachable without auth. The `/admin` → `/admin.html` rewrite also isn't
->    applied, but only matters for a *hard* navigation or refresh at `/admin`
->    (typed URL, bookmark) — clicking the in-app "Manage users" link works fine,
->    since SvelteKit's client-side router handles it without a server round trip.
+> - `allowedRoles` on `/api/*` isn't enforced locally — `/api/nights`/`/api/users`
+>   are reachable without auth. The `/admin` → `/admin.html` rewrite also isn't
+>   applied, but only matters for a *hard* navigation or refresh at `/admin`
+>   (typed URL, bookmark) — clicking the in-app "Manage users" link works fine,
+>   since SvelteKit's client-side router handles it without a server round trip.
+>
+> **The emulated login form at `/.auth/login/github` works correctly for real
+> typing** — type any User ID and Username and click Login; that identity
+> carries through to `/.auth/me` and every `/api/*` call, so signing in as
+> `ADMIN_GITHUB_LOGIN` (see app settings above) gets you real admin access
+> against the local database. The form's fields only save on a genuine
+> `keyup` DOM event, though — browser automation/scripting that sets input
+> values programmatically (no real keystrokes) silently falls back to a
+> cached-or-random ID with no username at all, which looks like "the CLI
+> can't carry the username through" but isn't a real bug for interactive use.
 >
 > To exercise `nights`/`users`/`GetRoles` business logic locally, call the raw
 > Functions host directly (bypasses the CLI's auth proxy, same code that runs
@@ -306,9 +313,11 @@ running Functions host is also available).
 
 ### Testing the member/admin views: local dev login
 
-Since the CLI's emulated GitHub login doesn't work (above), there's a small
-local-only login bar that lets you pick a role directly and skip GitHub
-entirely:
+Logging in for real via `/.auth/login/github` (above) is the most accurate way
+to test — it exercises the real API and database. For quicker, lower-fidelity
+iteration on the frontend's own view states (e.g. what the anonymous or
+pending screens look like) without touching the login form or the database,
+there's also a small local-only login bar that lets you pick a role directly:
 
 ```powershell
 copy .env.local.example .env.local
@@ -328,8 +337,8 @@ view, no login flow needed. This is safe to use however you like locally:
 - As a second, independent guard, the bar also refuses to activate anywhere
   except `localhost`/`127.0.0.1`.
 
-To go back to testing the real (broken) CLI login flow, delete `.env.local`
-and rebuild.
+To go back to testing the real CLI login flow only, delete `.env.local` and
+rebuild.
 
 ---
 

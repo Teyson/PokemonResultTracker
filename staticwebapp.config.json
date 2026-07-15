@@ -2,15 +2,13 @@
   "platform": {
     "apiRuntime": "node:20"
   },
-  "auth": {
-    "rolesSource": "/api/GetRoles"
-  },
   "routes": [
     { "route": "/login", "redirect": "/.auth/login/github" },
     { "route": "/logout", "redirect": "/.auth/logout" },
     { "route": "/admin", "rewrite": "/admin.html" },
-    { "route": "/api/nights*", "allowedRoles": ["member"] },
-    { "route": "/api/users*", "allowedRoles": ["admin"] }
+    { "route": "/api/nights*", "allowedRoles": ["authenticated"] },
+    { "route": "/api/users*", "allowedRoles": ["authenticated"] },
+    { "route": "/api/me", "allowedRoles": ["authenticated"] }
   ],
   "globalHeaders": {
     "cache-control": "no-store"

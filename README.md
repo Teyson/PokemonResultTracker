@@ -8,7 +8,9 @@ Built to run **free** on Azure: Static Web Apps (frontend + API) + Azure SQL (da
 - **API** — Azure Functions (Node 20, TypeScript) in `api/`, talking to Azure SQL through
   Drizzle ORM.
 - **Auth** — Static Web Apps built-in GitHub login. Only whitelisted users can read/write; the
-  admin manages the whitelist from `/admin`.
+  admin manages the whitelist from `/admin`. Role enforcement (member/admin) happens inside the
+  API itself rather than via Static Web Apps' `rolesSource` (a Standard-SKU-only feature) — see
+  **Auth design** below.
 
 ```
 Phone / Laptop ──▶ Static Web App (free)
@@ -126,6 +128,40 @@ Static Web App resource → **Settings → Environment variables** (a.k.a. Confi
 - **Manage members:** the **Manage users** link (admin only) → add/remove GitHub usernames.
 
 All data lives in the shared Azure SQL database, so it's identical on every device.
+
+---
+
+## Auth design
+
+Static Web Apps has two ways to grant custom roles (`member`/`admin`) on top of the built-in GitHub
+login:
+
+1. **`rolesSource`** — a Function that Azure calls on every login to compute roles dynamically.
+   **Standard SKU only** (~$9/mo).
+2. **Invitation links** — the admin generates a role-tagged link per person from the Azure portal;
+   **Free tier**, but no self-service whitelist UI, and it's a manual per-person Azure step.
+
+This app avoids both: routes only require the built-in `authenticated` role at the platform level
+(any signed-in GitHub user reaches the API), and each API function (`api/src/functions/nights.ts`,
+`users.ts`, `me.ts`) resolves the real role itself via `resolveRole()` in
+[`api/src/auth.ts`](api/src/auth.ts), checking the `allowed_users` whitelist table directly. This
+keeps the self-service "Manage users" admin page and costs $0.
+
+The frontend calls `GET /api/me` (instead of trusting `x-ms-client-principal.userRoles`, which on
+Free tier never holds anything beyond `authenticated`) to find out if the signed-in user is a
+member, an admin, or pending (signed in but not yet whitelisted).
+
+### Switching to Standard SKU later
+
+If the app outgrows the Free tier and you want Azure to enforce roles at the platform level again:
+
+1. Upgrade the Static Web App to the Standard plan in the portal.
+2. Restore the `rolesSource` function: `git show <commit-before-this-change>:api/src/functions/getRoles.ts`
+   (its logic now also lives in `resolveRole()`, so this is just re-adding the Function wrapper Azure
+   calls on login).
+3. Add back to `staticwebapp.config.json`: `"auth": { "rolesSource": "/api/GetRoles" }`, and change
+   `/api/nights*`/`/api/users*` back to `allowedRoles: ["member"]`/`["admin"]`.
+4. Redeploy. No schema or admin-UI changes needed either direction.
 
 ---
 

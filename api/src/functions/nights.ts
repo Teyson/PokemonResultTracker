@@ -2,17 +2,26 @@ import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } 
 import { z } from 'zod';
 import { eq, sql, desc } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { decks, nights } from '../db/schema';
+import { decks, nights, users } from '../db/schema';
+import { ensureUser } from '../db/userDirectory';
+import { getUser } from '../auth';
 import type { NightResponse } from '../types';
 
 /**
  * /api/nights — the league night log. Requires the "member" role (enforced by
  * allowedRoles in staticwebapp.config.json).
  *
- *   GET    /api/nights        -> NightResponse[]
- *   POST   /api/nights        -> create   (body: { date, deck, type, w, t, l })
- *   PUT    /api/nights/{id}   -> update
- *   DELETE /api/nights/{id}   -> delete
+ *   GET    /api/nights?scope=all   -> NightResponse[] (own nights, or everyone's for admins passing scope=all)
+ *   POST   /api/nights             -> create   (body: { date, deck, type, w, t, l })
+ *   PUT    /api/nights/{id}        -> update   (own nights only, unless admin)
+ *   DELETE /api/nights/{id}        -> delete   (own nights only, unless admin)
+ *
+ * Each night is owned via owner_id, a foreign key into the users table. Identity
+ * is the immutable Static Web Apps userId behind that row, so a creator renaming
+ * their GitHub account keeps access to their nights and the displayed owner name
+ * updates automatically (it's read from the joined users row, not copied in).
+ * Members only see and manage their own nights; admins can pass ?scope=all to
+ * view everyone's, and can edit/delete any night.
  *
  * Decks are normalized into their own table; the client just sends a deck name
  * plus type and we upsert the deck transparently, same as before.
@@ -44,7 +53,10 @@ const SELECT_COLUMNS = {
   w: nights.wins,
   t: nights.ties,
   l: nights.losses,
-  notes: nights.notes
+  notes: nights.notes,
+  // Owner display name comes from the joined users row, so it always reflects
+  // the owner's current GitHub login.
+  createdBy: users.githubLogin
 };
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -58,12 +70,18 @@ function toResponse(row: {
   t: number;
   l: number;
   notes: string | null;
+  createdBy: string;
 }): NightResponse {
   return { ...row, id: String(row.id), type: row.type ?? 'Colorless' };
 }
 
 async function selectNight(db: Db, id: number): Promise<NightResponse | undefined> {
-  const rows = await db.select(SELECT_COLUMNS).from(nights).innerJoin(decks, eq(decks.id, nights.deckId)).where(eq(nights.id, id));
+  const rows = await db
+    .select(SELECT_COLUMNS)
+    .from(nights)
+    .innerJoin(decks, eq(decks.id, nights.deckId))
+    .innerJoin(users, eq(users.id, nights.ownerId))
+    .where(eq(nights.id, id));
   return rows[0] ? toResponse(rows[0]) : undefined;
 }
 
@@ -78,6 +96,16 @@ async function upsertDeck(db: Db, name: string, type: string): Promise<number> {
   return inserted[0].id;
 }
 
+/** Look up a night's owner userId (via the users FK), for the ownership check. */
+async function ownerUserIdOf(db: Db, id: number): Promise<string | undefined> {
+  const rows = await db
+    .select({ ownerUserId: users.userId })
+    .from(nights)
+    .innerJoin(users, eq(users.id, nights.ownerId))
+    .where(eq(nights.id, id));
+  return rows[0]?.ownerUserId;
+}
+
 app.http('nights', {
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   authLevel: 'anonymous',
@@ -85,13 +113,20 @@ app.http('nights', {
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     const idParam = request.params.id;
     try {
+      const user = getUser(request);
+      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
+      const isAdmin = user.userRoles.includes('admin');
+
       const db = await getDb();
 
       if (request.method === 'GET') {
+        const wantsAll = isAdmin && new URL(request.url).searchParams.get('scope') === 'all';
         const rows = await db
           .select(SELECT_COLUMNS)
           .from(nights)
           .innerJoin(decks, eq(decks.id, nights.deckId))
+          .innerJoin(users, eq(users.id, nights.ownerId))
+          .where(wantsAll ? undefined : eq(users.userId, user.userId))
           .orderBy(desc(nights.playedOn), desc(nights.id));
         return { jsonBody: rows.map(toResponse) };
       }
@@ -99,8 +134,11 @@ app.http('nights', {
       if (request.method === 'DELETE') {
         if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
         const id = Number(idParam);
-        const existing = await db.select({ id: nights.id }).from(nights).where(eq(nights.id, id));
-        if (existing.length === 0) return { status: 404, jsonBody: { error: 'Night not found.' } };
+        const ownerUserId = await ownerUserIdOf(db, id);
+        if (ownerUserId === undefined) return { status: 404, jsonBody: { error: 'Night not found.' } };
+        if (!isAdmin && ownerUserId !== user.userId) {
+          return { status: 403, jsonBody: { error: 'You can only delete your own nights.' } };
+        }
         await db.delete(nights).where(eq(nights.id, id));
         return { status: 204 };
       }
@@ -119,18 +157,30 @@ app.http('nights', {
       const deckId = await upsertDeck(db, input.deck, input.type);
 
       if (request.method === 'POST') {
+        const ownerId = await ensureUser(db, user.userId, user.userDetails);
         const inserted = await db
           .insert(nights)
           .output({ id: nights.id })
-          .values({ playedOn: input.date, deckId, wins: input.w, ties: input.t, losses: input.l, notes: input.notes });
+          .values({
+            playedOn: input.date,
+            deckId,
+            wins: input.w,
+            ties: input.t,
+            losses: input.l,
+            notes: input.notes,
+            ownerId
+          });
         return { status: 201, jsonBody: await selectNight(db, inserted[0].id) };
       }
 
       // PUT
       if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
       const id = Number(idParam);
-      const existing = await db.select({ id: nights.id }).from(nights).where(eq(nights.id, id));
-      if (existing.length === 0) return { status: 404, jsonBody: { error: 'Night not found.' } };
+      const ownerUserId = await ownerUserIdOf(db, id);
+      if (ownerUserId === undefined) return { status: 404, jsonBody: { error: 'Night not found.' } };
+      if (!isAdmin && ownerUserId !== user.userId) {
+        return { status: 403, jsonBody: { error: 'You can only edit your own nights.' } };
+      }
       await db
         .update(nights)
         .set({ playedOn: input.date, deckId, wins: input.w, ties: input.t, losses: input.l, notes: input.notes })

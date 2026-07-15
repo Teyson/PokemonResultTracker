@@ -7,6 +7,7 @@ export interface NightResponse {
   t: number;
   l: number;
   notes: string | null;
+  createdBy: string;
 }
 
 export interface AllowedUserResponse {

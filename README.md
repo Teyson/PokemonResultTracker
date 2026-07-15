@@ -78,7 +78,7 @@ git push -u origin main
 
 ### 4. Add the app settings
 
-Static Web App resource → **Settings → Environment variables** (a.k.a. Configuration) → add these four, then **Save**:
+Static Web App resource → **Settings → Environment variables** (a.k.a. Configuration) → add these, then **Save**:
 
 | Name | Value |
 |------|-------|
@@ -86,10 +86,30 @@ Static Web App resource → **Settings → Environment variables** (a.k.a. Confi
 | `SQL_DATABASE` | `pokemonresulttracker` |
 | `SQL_USER` | `sqladmin` (your SQL admin login) |
 | `SQL_PASSWORD` | your SQL admin password |
-| `ADMIN_GITHUB_LOGIN` | your **GitHub username** — this is the admin account |
+| `ADMIN_USER_ID` | your immutable Static Web Apps user id — the admin account (see below) |
+| `ADMIN_GITHUB_LOGIN` | your **GitHub username** — transitional bootstrap only (see below) |
 
-> `ADMIN_GITHUB_LOGIN` is how you become admin. Set it to your exact GitHub handle
-> (e.g. `Teyson`). You never need to whitelist yourself.
+> **Who is admin.** Admin identity is keyed on your immutable Static Web Apps
+> **user id** (`ADMIN_USER_ID`), not your GitHub username, so you can rename your
+> GitHub account without losing admin. But you can't know that id until you've
+> signed in once — so it's a two-step bootstrap:
+>
+> 1. On first deploy, set **`ADMIN_GITHUB_LOGIN`** to your exact GitHub handle
+>    (e.g. `Teyson`) and leave `ADMIN_USER_ID` empty. This lets you in as admin
+>    by login as a one-time bootstrap.
+> 2. Signed in, open **`https://<your-app>/.auth/me`** and copy `clientPrincipal.userId`.
+>    Put that value in **`ADMIN_USER_ID`** and **Save**. From now on you're admin
+>    by immutable id, and `ADMIN_GITHUB_LOGIN` is just a fallback you can delete.
+>
+> You never need to whitelist yourself. Members are invited by GitHub username
+> under **Manage users**; each member's row is automatically bound to their
+> immutable id the first time they sign in, so member renames don't break either.
+>
+> **Renames just work.** Nights are owned by a foreign key into a `users` table
+> keyed on the immutable user id; the GitHub login is stored only as a display
+> name and refreshed on every login. So renaming a GitHub account keeps ownership
+> and access intact and updates the displayed name everywhere automatically — no
+> manual fix-ups.
 
 ### 5. Use it
 
@@ -198,7 +218,7 @@ cd ..
 npm run db:up              # starts the SQL Server container (docker-compose.yml)
 
 cd api
-npm run db:migrate         # creates the decks/nights/allowed_users tables
+npm run db:migrate         # creates the decks/users/nights/allowed_users tables
 npm run seed                # optional — one sample night, same as sql/schema.sql's seed
 cd ..
 ```

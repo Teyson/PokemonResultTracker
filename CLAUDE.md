@@ -49,3 +49,12 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
 - Keep naming consistent with the repo name (`PokemonResultTracker` /
   `pokemonresulttracker` for the DB) — don't reintroduce references to the old
   `tuesday-league` prototype this project was migrated from.
+
+## Local environment quirks
+
+- `docker` is not on `PATH` in Claude Code's shell tools (Bash/PowerShell), even
+  though Docker Desktop is installed and usually already running with the local
+  SQL Server container up. Don't conclude Docker is unavailable — locate the
+  `docker.exe` under the Docker Desktop install directory (typically under
+  `Program Files\Docker\Docker\resources\bin`) and invoke it by full path. The
+  `docker compose` subcommand works the same way via that binary.

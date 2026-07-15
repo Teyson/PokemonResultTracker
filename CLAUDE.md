@@ -49,13 +49,16 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   **Production migrations are automatic**: the `migrate_database` job in
   `.github/workflows/azure-static-web-apps-*.yml` runs `npm run db:migrate`
   against the production Azure SQL database on every push to `main`, before
-  the API is deployed. Since GitHub-hosted runners don't have stable IPs, the
-  job logs into Azure via OIDC (no stored client secret — a federated
-  credential scoped to `main`) and opens a firewall rule for just that run's
-  IP, then closes it again after migrating. `drizzle-kit migrate` tracks
-  already-applied migrations itself, so this is a no-op when a merge has no
-  new migration files — don't
-  run `db:migrate` against production manually.
+  the API is deployed. GitHub-hosted runners have no stable egress IP (it can
+  even change mid-job) and GitHub's published Actions IP ranges are far too
+  numerous (5000+ CIDR blocks) for per-block firewall rules, so per-IP
+  allow-listing isn't viable. Instead the job logs into Azure via OIDC (no
+  stored client secret — a federated credential scoped to `main`) and opens
+  the SQL server firewall to all IPs for just the run's duration, then closes
+  it again afterward — the exposure window is bounded by time, not by IP.
+  `drizzle-kit migrate` tracks already-applied migrations itself, so this is a
+  no-op when a merge has no new migration files — don't run `db:migrate`
+  against production manually.
 - Request bodies are validated with Zod schemas colocated in each function file,
   not hand-rolled regex/parsing.
 - `sql/schema.sql` is kept only as a fresh-install fallback reference; it is not

@@ -20,6 +20,7 @@
   let nights = $state<Night[]>([]);
   let nightsLoaded = $state(false);
   let editing = $state<Night | null>(null);
+  let viewScope = $state<'mine' | 'all'>('mine');
 
   $effect(() => {
     if (isMember && !nightsLoaded) loadNights();
@@ -27,11 +28,19 @@
 
   async function loadNights() {
     try {
-      nights = (await api<Night[]>('/api/nights')) ?? [];
+      const query = isAdmin && viewScope === 'all' ? '?scope=all' : '';
+      nights = (await api<Night[]>(`/api/nights${query}`)) ?? [];
       nightsLoaded = true;
     } catch (e) {
       toast(`Could not load nights: ${(e as Error).message}`, true);
     }
+  }
+
+  function setViewScope(scope: 'mine' | 'all') {
+    if (viewScope === scope) return;
+    viewScope = scope;
+    nightsLoaded = false;
+    loadNights();
   }
 
   async function handleSave(input: NightInput, editId: string | null) {
@@ -121,8 +130,16 @@
       <Scoreboard {nights} />
       <NightForm {nights} {editing} onSave={handleSave} onCancel={() => (editing = null)} />
 
-      <div class="section-title">Nights</div>
-      <NightsList {nights} onEdit={startEdit} onDelete={handleDelete} />
+      <div class="section-title">
+        Nights
+        {#if isAdmin}
+          <div class="scope-toggle">
+            <button class:active={viewScope === 'mine'} onclick={() => setViewScope('mine')}>Mine</button>
+            <button class:active={viewScope === 'all'} onclick={() => setViewScope('all')}>Everyone</button>
+          </div>
+        {/if}
+      </div>
+      <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
 
       <DeckTable {nights} />
 
@@ -221,6 +238,28 @@
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .scope-toggle {
+    display: flex;
+    gap: 4px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .scope-toggle button {
+    font-family: inherit;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .scope-toggle button.active {
+    color: var(--text);
+    border-color: var(--muted2);
+    background: var(--panel2);
   }
 
   .foot {

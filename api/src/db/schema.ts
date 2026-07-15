@@ -26,6 +26,7 @@ export const nights = mssqlTable('nights', {
   ties: int().notNull().default(0),
   losses: int().notNull().default(0),
   notes: nvarchar({ length: 500 }),
+  createdBy: nvarchar('created_by', { length: 100 }).notNull(),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

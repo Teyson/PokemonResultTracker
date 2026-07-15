@@ -3,16 +3,21 @@ import { z } from 'zod';
 import { eq, sql, desc } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { decks, nights } from '../db/schema';
+import { getUser } from '../auth';
 import type { NightResponse } from '../types';
 
 /**
  * /api/nights — the league night log. Requires the "member" role (enforced by
  * allowedRoles in staticwebapp.config.json).
  *
- *   GET    /api/nights        -> NightResponse[]
- *   POST   /api/nights        -> create   (body: { date, deck, type, w, t, l })
- *   PUT    /api/nights/{id}   -> update
- *   DELETE /api/nights/{id}   -> delete
+ *   GET    /api/nights?scope=all   -> NightResponse[] (own nights, or everyone's for admins passing scope=all)
+ *   POST   /api/nights             -> create   (body: { date, deck, type, w, t, l })
+ *   PUT    /api/nights/{id}        -> update   (own nights only, unless admin)
+ *   DELETE /api/nights/{id}        -> delete   (own nights only, unless admin)
+ *
+ * Each night is owned by the GitHub login that created it (createdBy). Members
+ * only see and manage their own nights; admins can pass ?scope=all to view
+ * everyone's, and can edit/delete any night.
  *
  * Decks are normalized into their own table; the client just sends a deck name
  * plus type and we upsert the deck transparently, same as before.
@@ -44,7 +49,8 @@ const SELECT_COLUMNS = {
   w: nights.wins,
   t: nights.ties,
   l: nights.losses,
-  notes: nights.notes
+  notes: nights.notes,
+  createdBy: nights.createdBy
 };
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -58,6 +64,7 @@ function toResponse(row: {
   t: number;
   l: number;
   notes: string | null;
+  createdBy: string;
 }): NightResponse {
   return { ...row, id: String(row.id), type: row.type ?? 'Colorless' };
 }
@@ -85,13 +92,19 @@ app.http('nights', {
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     const idParam = request.params.id;
     try {
+      const user = getUser(request);
+      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
+      const isAdmin = user.userRoles.includes('admin');
+
       const db = await getDb();
 
       if (request.method === 'GET') {
+        const wantsAll = isAdmin && new URL(request.url).searchParams.get('scope') === 'all';
         const rows = await db
           .select(SELECT_COLUMNS)
           .from(nights)
           .innerJoin(decks, eq(decks.id, nights.deckId))
+          .where(wantsAll ? undefined : eq(nights.createdBy, user.userDetails))
           .orderBy(desc(nights.playedOn), desc(nights.id));
         return { jsonBody: rows.map(toResponse) };
       }
@@ -99,8 +112,11 @@ app.http('nights', {
       if (request.method === 'DELETE') {
         if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
         const id = Number(idParam);
-        const existing = await db.select({ id: nights.id }).from(nights).where(eq(nights.id, id));
+        const existing = await db.select({ id: nights.id, createdBy: nights.createdBy }).from(nights).where(eq(nights.id, id));
         if (existing.length === 0) return { status: 404, jsonBody: { error: 'Night not found.' } };
+        if (!isAdmin && existing[0].createdBy !== user.userDetails) {
+          return { status: 403, jsonBody: { error: 'You can only delete your own nights.' } };
+        }
         await db.delete(nights).where(eq(nights.id, id));
         return { status: 204 };
       }
@@ -122,15 +138,26 @@ app.http('nights', {
         const inserted = await db
           .insert(nights)
           .output({ id: nights.id })
-          .values({ playedOn: input.date, deckId, wins: input.w, ties: input.t, losses: input.l, notes: input.notes });
+          .values({
+            playedOn: input.date,
+            deckId,
+            wins: input.w,
+            ties: input.t,
+            losses: input.l,
+            notes: input.notes,
+            createdBy: user.userDetails
+          });
         return { status: 201, jsonBody: await selectNight(db, inserted[0].id) };
       }
 
       // PUT
       if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
       const id = Number(idParam);
-      const existing = await db.select({ id: nights.id }).from(nights).where(eq(nights.id, id));
+      const existing = await db.select({ id: nights.id, createdBy: nights.createdBy }).from(nights).where(eq(nights.id, id));
       if (existing.length === 0) return { status: 404, jsonBody: { error: 'Night not found.' } };
+      if (!isAdmin && existing[0].createdBy !== user.userDetails) {
+        return { status: 403, jsonBody: { error: 'You can only edit your own nights.' } };
+      }
       await db
         .update(nights)
         .set({ playedOn: input.date, deckId, wins: input.w, ties: input.t, losses: input.l, notes: input.notes })

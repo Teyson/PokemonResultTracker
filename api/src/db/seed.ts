@@ -19,7 +19,7 @@ async function seed() {
 
   const existingNight = await db.select({ id: nights.id }).from(nights).where(eq(nights.deckId, deck.id));
   if (existingNight.length === 0) {
-    await db.insert(nights).values({ playedOn: '2026-07-07', deckId: deck.id, wins: 0, ties: 2, losses: 2 });
+    await db.insert(nights).values({ playedOn: '2026-07-07', deckId: deck.id, wins: 0, ties: 2, losses: 2, createdBy: 'Teyson' });
   }
 
   console.log('Seed complete.');

@@ -4,10 +4,12 @@
 
   let {
     nights,
+    showOwner = false,
     onEdit,
     onDelete
   }: {
     nights: Night[];
+    showOwner?: boolean;
     onEdit: (n: Night) => void;
     onDelete: (n: Night) => void;
   } = $props();
@@ -28,7 +30,10 @@
           <span class="deck">{n.deck}</span>
           <span class="chip" style="background:{colorOf(n.type)}22;color:{colorOf(n.type)}">{n.type}</span>
         </div>
-        <div class="date">{fmtDate(n.date)}</div>
+        <div class="date">
+          {fmtDate(n.date)}
+          {#if showOwner}<span class="owner">· {n.createdBy}</span>{/if}
+        </div>
       </div>
       <div class="stats">
         <div class="record">{n.w}<span class="s">–</span>{n.t}<span class="s">–</span>{n.l}</div>
@@ -103,6 +108,9 @@
     display: flex;
     align-items: center;
     gap: 7px;
+  }
+  .night .owner {
+    color: var(--muted2);
   }
   .night .stats {
     display: flex;

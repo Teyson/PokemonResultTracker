@@ -19,7 +19,12 @@ async function seed() {
 
   const existingNight = await db.select({ id: nights.id }).from(nights).where(eq(nights.deckId, deck.id));
   if (existingNight.length === 0) {
-    await db.insert(nights).values({ playedOn: '2026-07-07', deckId: deck.id, wins: 0, ties: 2, losses: 2, createdBy: 'Teyson' });
+    // createdByUserId matches the local dev-login admin principal (userId
+    // `dev-<username>`, see src/lib/devAuth.ts) so the seed night is owned by
+    // the admin when testing locally. createdBy stays as the display login.
+    await db
+      .insert(nights)
+      .values({ playedOn: '2026-07-07', deckId: deck.id, wins: 0, ties: 2, losses: 2, createdByUserId: 'dev-Teyson', createdBy: 'Teyson' });
   }
 
   console.log('Seed complete.');

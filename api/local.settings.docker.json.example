@@ -8,6 +8,7 @@
     "SQL_USER": "sa",
     "SQL_PASSWORD": "P@ssw0rd_Local_Dev",
     "SQL_ENCRYPT": "false",
+    "ADMIN_USER_ID": "dev-Teyson",
     "ADMIN_GITHUB_LOGIN": "Teyson"
   }
 }

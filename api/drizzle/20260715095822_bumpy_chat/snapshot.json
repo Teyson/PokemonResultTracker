@@ -1,0 +1,365 @@
+{
+  "version": "2",
+  "dialect": "mssql",
+  "id": "3239f8e6-80d3-4d43-bb55-e8909dd63401",
+  "prevIds": [
+    "0b7b82c8-6460-404c-b2a2-00229914f243"
+  ],
+  "ddl": [
+    {
+      "name": "allowed_users",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "decks",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "nights",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "github_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(20)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "added_by",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "nvarchar(50)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "energy_type",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "date",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "played_on",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "deck_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "wins",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "ties",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "losses",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "nvarchar(500)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "notes",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "created_by_user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_by",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "columns": [
+        "deck_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "decks",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "nights_deck_id_decks_id_fk",
+      "entityType": "fks",
+      "table": "nights",
+      "schema": "dbo"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "allowed_users_pkey",
+      "table": "allowed_users",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "decks_pkey",
+      "table": "decks",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "nights_pkey",
+      "table": "nights",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "github_login"
+      ],
+      "name": "allowed_users_github_login_key",
+      "schema": "dbo",
+      "table": "allowed_users",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "name"
+      ],
+      "name": "decks_name_key",
+      "schema": "dbo",
+      "table": "decks",
+      "entityType": "uniques"
+    },
+    {
+      "column": "role",
+      "nameExplicit": false,
+      "default": "('member')",
+      "name": "allowed_users_role_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "allowed_users"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "allowed_users_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "allowed_users"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "decks_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "decks"
+    },
+    {
+      "column": "wins",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_wins_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "ties",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_ties_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "losses",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_losses_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "nights_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    }
+  ],
+  "renames": []
+}

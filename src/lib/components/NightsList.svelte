@@ -34,6 +34,13 @@
           {fmtDate(n.date)}
           {#if showOwner}<span class="owner">· {n.createdBy}</span>{/if}
         </div>
+        {#if n.matches && n.matches.length > 0}
+          <div class="matchstrip" aria-label="Match results">
+            {#each n.matches as m (m.roundNo)}
+              <span class="mchip {m.result.toLowerCase()}">{m.result}</span>
+            {/each}
+          </div>
+        {/if}
       </div>
       <div class="stats">
         <div class="record">{n.w}<span class="s">–</span>{n.t}<span class="s">–</span>{n.l}</div>
@@ -111,6 +118,36 @@
   }
   .night .owner {
     color: var(--muted2);
+  }
+  .matchstrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 6px;
+  }
+  .mchip {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: var(--display);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .mchip.w {
+    background: var(--win);
+    color: #08110a;
+  }
+  .mchip.t {
+    background: var(--tie);
+    color: #191104;
+  }
+  .mchip.l {
+    background: var(--loss);
+    color: #fff;
   }
   .night .stats {
     display: flex;

@@ -1,3 +1,8 @@
+export interface Match {
+  roundNo: number;
+  result: 'W' | 'T' | 'L';
+}
+
 export interface Night {
   id: string;
   date: string; // YYYY-MM-DD
@@ -8,6 +13,7 @@ export interface Night {
   l: number;
   notes: string | null;
   createdBy: string;
+  matches?: Match[];
 }
 
 export interface NightInput {
@@ -17,6 +23,7 @@ export interface NightInput {
   w: number;
   t: number;
   l: number;
+  matches?: { result: 'W' | 'T' | 'L' }[];
 }
 
 export interface AllowedUser {

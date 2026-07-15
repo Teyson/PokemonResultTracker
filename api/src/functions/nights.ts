@@ -1,11 +1,11 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { z } from 'zod';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, inArray, sql, asc, desc } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { decks, nights, users } from '../db/schema';
+import { decks, matches, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
 import { getUser, resolveRole } from '../auth';
-import type { NightResponse } from '../types';
+import type { MatchResponse, NightResponse } from '../types';
 
 /**
  * /api/nights — the league night log. Requires the "member" role. Free tier
@@ -33,6 +33,8 @@ const nonNegativeInt = z.preprocess((v) => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }, z.number().int().min(0));
 
+const matchInputSchema = z.object({ result: z.enum(['W', 'T', 'L']) });
+
 const nightInputSchema = z.object({
   date: z
     .string()
@@ -43,7 +45,11 @@ const nightInputSchema = z.object({
   w: nonNegativeInt,
   t: nonNegativeInt,
   l: nonNegativeInt,
-  notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable())
+  notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable()),
+  // Detailed mode: when present, replaces the night's per-match log and the
+  // w/t/l totals are derived from it instead of the fields above. Absent
+  // (quick mode) leaves any existing matches untouched.
+  matches: z.array(matchInputSchema).max(50).optional()
 });
 
 const SELECT_COLUMNS = {
@@ -61,6 +67,9 @@ const SELECT_COLUMNS = {
 };
 
 type Db = Awaited<ReturnType<typeof getDb>>;
+// Either the top-level db handle or the transaction handle passed into a
+// db.transaction() callback — writeMatches runs under both.
+type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 function toResponse(row: {
   id: number;
@@ -76,6 +85,43 @@ function toResponse(row: {
   return { ...row, id: String(row.id), type: row.type ?? 'Colorless' };
 }
 
+/** Totals derived from a detailed-mode match list, authoritative over the raw w/t/l fields. */
+function deriveTotals(matchList: { result: 'W' | 'T' | 'L' }[]): { w: number; t: number; l: number } {
+  let w = 0,
+    t = 0,
+    l = 0;
+  for (const m of matchList) {
+    if (m.result === 'W') w++;
+    else if (m.result === 'T') t++;
+    else l++;
+  }
+  return { w, t, l };
+}
+
+/** Replaces a night's match log in place (delete-then-insert), assigning sequential round numbers. */
+async function writeMatches(db: DbOrTx, nightId: number, matchList: { result: 'W' | 'T' | 'L' }[]): Promise<void> {
+  await db.delete(matches).where(eq(matches.nightId, nightId));
+  if (matchList.length === 0) return;
+  await db.insert(matches).values(matchList.map((m, i) => ({ nightId, roundNo: i + 1, result: m.result })));
+}
+
+/** Batch-fetches match logs for a set of nights, keyed by night id, ordered by round. */
+async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, MatchResponse[]>> {
+  const byNight = new Map<number, MatchResponse[]>();
+  if (nightIds.length === 0) return byNight;
+  const rows = await db
+    .select({ nightId: matches.nightId, roundNo: matches.roundNo, result: matches.result })
+    .from(matches)
+    .where(inArray(matches.nightId, nightIds))
+    .orderBy(asc(matches.nightId), asc(matches.roundNo));
+  for (const row of rows) {
+    const list = byNight.get(row.nightId) ?? [];
+    list.push({ roundNo: row.roundNo, result: row.result as 'W' | 'T' | 'L' });
+    byNight.set(row.nightId, list);
+  }
+  return byNight;
+}
+
 async function selectNight(db: Db, id: number): Promise<NightResponse | undefined> {
   const rows = await db
     .select(SELECT_COLUMNS)
@@ -83,7 +129,11 @@ async function selectNight(db: Db, id: number): Promise<NightResponse | undefine
     .innerJoin(decks, eq(decks.id, nights.deckId))
     .innerJoin(users, eq(users.id, nights.ownerId))
     .where(eq(nights.id, id));
-  return rows[0] ? toResponse(rows[0]) : undefined;
+  if (!rows[0]) return undefined;
+  const night = toResponse(rows[0]);
+  const matchList = (await fetchMatchesFor(db, [id])).get(id);
+  if (matchList) night.matches = matchList;
+  return night;
 }
 
 /** Case-insensitive upsert-by-name, mirroring the original MERGE statement. */
@@ -130,7 +180,18 @@ app.http('nights', {
           .innerJoin(users, eq(users.id, nights.ownerId))
           .where(wantsAll ? undefined : eq(users.userId, user.userId))
           .orderBy(desc(nights.playedOn), desc(nights.id));
-        return { jsonBody: rows.map(toResponse) };
+        const matchesByNight = await fetchMatchesFor(
+          db,
+          rows.map((r) => r.id)
+        );
+        return {
+          jsonBody: rows.map((row) => {
+            const night = toResponse(row);
+            const matchList = matchesByNight.get(row.id);
+            if (matchList) night.matches = matchList;
+            return night;
+          })
+        };
       }
 
       if (request.method === 'DELETE') {
@@ -141,7 +202,10 @@ app.http('nights', {
         if (!isAdmin && ownerUserId !== user.userId) {
           return { status: 403, jsonBody: { error: 'You can only delete your own nights.' } };
         }
-        await db.delete(nights).where(eq(nights.id, id));
+        await db.transaction(async (tx) => {
+          await tx.delete(matches).where(eq(matches.nightId, id));
+          await tx.delete(nights).where(eq(nights.id, id));
+        });
         return { status: 204 };
       }
 
@@ -157,22 +221,31 @@ app.http('nights', {
       }
       const input = parsed.data;
       const deckId = await upsertDeck(db, input.deck, input.type);
+      // Detailed mode (matches present) derives w/t/l from the match log;
+      // quick mode uses the raw fields and clears any prior match log so the
+      // two can never drift apart.
+      const totals = input.matches ? deriveTotals(input.matches) : { w: input.w, t: input.t, l: input.l };
 
       if (request.method === 'POST') {
         const ownerId = await ensureUser(db, user.userId, user.userDetails);
-        const inserted = await db
-          .insert(nights)
-          .output({ id: nights.id })
-          .values({
-            playedOn: input.date,
-            deckId,
-            wins: input.w,
-            ties: input.t,
-            losses: input.l,
-            notes: input.notes,
-            ownerId
-          });
-        return { status: 201, jsonBody: await selectNight(db, inserted[0].id) };
+        const newId = await db.transaction(async (tx) => {
+          const inserted = await tx
+            .insert(nights)
+            .output({ id: nights.id })
+            .values({
+              playedOn: input.date,
+              deckId,
+              wins: totals.w,
+              ties: totals.t,
+              losses: totals.l,
+              notes: input.notes,
+              ownerId
+            });
+          const id = inserted[0].id;
+          if (input.matches) await writeMatches(tx, id, input.matches);
+          return id;
+        });
+        return { status: 201, jsonBody: await selectNight(db, newId) };
       }
 
       // PUT
@@ -183,10 +256,13 @@ app.http('nights', {
       if (!isAdmin && ownerUserId !== user.userId) {
         return { status: 403, jsonBody: { error: 'You can only edit your own nights.' } };
       }
-      await db
-        .update(nights)
-        .set({ playedOn: input.date, deckId, wins: input.w, ties: input.t, losses: input.l, notes: input.notes })
-        .where(eq(nights.id, id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(nights)
+          .set({ playedOn: input.date, deckId, wins: totals.w, ties: totals.t, losses: totals.l, notes: input.notes })
+          .where(eq(nights.id, id));
+        await writeMatches(tx, id, input.matches ?? []);
+      });
       return { jsonBody: await selectNight(db, id) };
     } catch (err) {
       context.error('nights handler failed', err);

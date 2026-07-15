@@ -81,6 +81,8 @@ foundation** — 2–6 depend on it.
 
 ### 1. Per-match logging
 
+> **Status: implemented in PR #11**
+
 **What.** Record each match of a night individually instead of only aggregate
 W/T/L. A night becomes a container of matches; W/T/L is derived.
 

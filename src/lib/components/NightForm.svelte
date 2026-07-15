@@ -31,6 +31,9 @@
 
   let decks = $derived(deckRegistry());
 
+  type MatchResult = 'W' | 'T' | 'L';
+  const MATCH_RESULTS: MatchResult[] = ['W', 'T', 'L'];
+
   let date = $state(recentTuesday());
   let deck = $state('');
   let newDeckName = $state('');
@@ -39,6 +42,8 @@
   let w = $state(0);
   let t = $state(0);
   let l = $state(0);
+  let detailed = $state(false);
+  let matchResults = $state<MatchResult[]>([]);
   let saving = $state(false);
 
   $effect(() => {
@@ -51,6 +56,8 @@
       w = editing.w;
       t = editing.t;
       l = editing.l;
+      detailed = (editing.matches?.length ?? 0) > 0;
+      matchResults = editing.matches?.map((m) => m.result) ?? [];
     } else {
       const opts = deckRegistry();
       date = recentTuesday();
@@ -61,8 +68,24 @@
       w = 0;
       t = 0;
       l = 0;
+      detailed = false;
+      matchResults = [];
     }
   });
+
+  function toggleDetailed() {
+    detailed = !detailed;
+    if (detailed && matchResults.length === 0) matchResults = [];
+  }
+  function addMatch() {
+    matchResults = [...matchResults, 'W'];
+  }
+  function setMatchResult(i: number, result: MatchResult) {
+    matchResults = matchResults.map((r, idx) => (idx === i ? result : r));
+  }
+  function removeMatch(i: number) {
+    matchResults = matchResults.filter((_, idx) => idx !== i);
+  }
 
   function selectDeck(d: DeckOption) {
     newDeck = false;
@@ -83,7 +106,10 @@
     const finalDeck = (newDeck ? newDeckName.trim() : deck) || 'Untitled deck';
     saving = true;
     try {
-      await onSave({ date: date || recentTuesday(), deck: finalDeck, type, w, t, l }, editing?.id ?? null);
+      const input = detailed
+        ? { date: date || recentTuesday(), deck: finalDeck, type, w, t, l, matches: matchResults.map((result) => ({ result })) }
+        : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l };
+      await onSave(input, editing?.id ?? null);
     } finally {
       saving = false;
     }
@@ -142,29 +168,60 @@
     </div>
   {/if}
 
-  <div class="rec-row">
-    <div class="stepper w">
-      <div class="lab">Wins</div>
-      <div class="ctl">
-        <button type="button" onclick={() => step('w', -1)}>−</button><span class="val">{w}</span
-        ><button type="button" onclick={() => step('w', 1)}>+</button>
-      </div>
-    </div>
-    <div class="stepper t">
-      <div class="lab">Ties</div>
-      <div class="ctl">
-        <button type="button" onclick={() => step('t', -1)}>−</button><span class="val">{t}</span
-        ><button type="button" onclick={() => step('t', 1)}>+</button>
-      </div>
-    </div>
-    <div class="stepper l">
-      <div class="lab">Losses</div>
-      <div class="ctl">
-        <button type="button" onclick={() => step('l', -1)}>−</button><span class="val">{l}</span
-        ><button type="button" onclick={() => step('l', 1)}>+</button>
-      </div>
-    </div>
+  <div class="mode-row">
+    <span class="field-label">{detailed ? 'Per-match log' : 'Quick record'}</span>
+    <button type="button" class="mode-toggle" onclick={toggleDetailed}>
+      {detailed ? '↺ Quick mode' : '☰ Log each match'}
+    </button>
   </div>
+
+  {#if detailed}
+    <div class="matches">
+      {#each matchResults as result, i (i)}
+        <div class="matchrow">
+          <span class="rn">R{i + 1}</span>
+          <div class="seg" role="group" aria-label="Match {i + 1} result">
+            {#each MATCH_RESULTS as r (r)}
+              <button
+                type="button"
+                class="segbtn {r.toLowerCase()}"
+                aria-pressed={result === r}
+                onclick={() => setMatchResult(i, r)}>{r}</button
+              >
+            {/each}
+          </div>
+          <button type="button" class="rmbtn" aria-label="Remove match {i + 1}" onclick={() => removeMatch(i)}
+            >✕</button
+          >
+        </div>
+      {/each}
+      <button type="button" class="addmatch" onclick={addMatch}>+ Add match</button>
+    </div>
+  {:else}
+    <div class="rec-row">
+      <div class="stepper w">
+        <div class="lab">Wins</div>
+        <div class="ctl">
+          <button type="button" onclick={() => step('w', -1)}>−</button><span class="val">{w}</span
+          ><button type="button" onclick={() => step('w', 1)}>+</button>
+        </div>
+      </div>
+      <div class="stepper t">
+        <div class="lab">Ties</div>
+        <div class="ctl">
+          <button type="button" onclick={() => step('t', -1)}>−</button><span class="val">{t}</span
+          ><button type="button" onclick={() => step('t', 1)}>+</button>
+        </div>
+      </div>
+      <div class="stepper l">
+        <div class="lab">Losses</div>
+        <div class="ctl">
+          <button type="button" onclick={() => step('l', -1)}>−</button><span class="val">{l}</span
+          ><button type="button" onclick={() => step('l', 1)}>+</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <div class="actions">
     <button class="btn primary" disabled={saving} onclick={save}>{editing ? 'Save changes' : 'Log night'}</button>
@@ -289,6 +346,110 @@
     color: var(--gold);
     background: rgba(246, 201, 69, 0.1);
     box-shadow: none;
+  }
+  .mode-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 9px;
+  }
+  .mode-toggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 11.5px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .mode-toggle:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .matches {
+    margin-bottom: 13px;
+  }
+  .matchrow {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 7px;
+  }
+  .matchrow .rn {
+    font-size: 11px;
+    color: var(--muted);
+    width: 24px;
+    flex: 0 0 auto;
+  }
+  .seg {
+    display: flex;
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .segbtn {
+    flex: 1;
+    border: none;
+    border-right: 1px solid var(--line);
+    background: var(--ink);
+    color: var(--muted);
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--display);
+  }
+  .segbtn:last-child {
+    border-right: none;
+  }
+  .segbtn:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: -2px;
+  }
+  .segbtn.w[aria-pressed='true'] {
+    background: var(--win);
+    color: #08110a;
+  }
+  .segbtn.t[aria-pressed='true'] {
+    background: var(--tie);
+    color: #191104;
+  }
+  .segbtn.l[aria-pressed='true'] {
+    background: var(--loss);
+    color: #fff;
+  }
+  .rmbtn {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .rmbtn:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .addmatch {
+    width: 100%;
+    border: 1px dashed var(--line);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 9px;
+    font-size: 12.5px;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 2px;
+  }
+  .addmatch:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
   }
   .rec-row {
     display: flex;

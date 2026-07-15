@@ -1,3 +1,8 @@
+export interface MatchResponse {
+  roundNo: number;
+  result: 'W' | 'T' | 'L';
+}
+
 export interface NightResponse {
   id: string;
   date: string;
@@ -8,6 +13,7 @@ export interface NightResponse {
   l: number;
   notes: string | null;
   createdBy: string;
+  matches?: MatchResponse[];
 }
 
 export interface AllowedUserResponse {

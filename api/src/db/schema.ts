@@ -57,6 +57,27 @@ export const nights = mssqlTable('nights', {
 });
 
 /**
+ * Per-match results within a night, added so a night can optionally be logged
+ * as individual matches instead of only an aggregate W/T/L. The nights.wins/
+ * ties/losses columns stay authoritative and are recomputed from this table
+ * on every write, so every existing read path (Scoreboard, DeckTable,
+ * TrendChart) keeps working untouched for both quick-logged and detailed
+ * nights.
+ */
+export const matches = mssqlTable('matches', {
+  id: int().primaryKey().identity(),
+  nightId: int('night_id')
+    .notNull()
+    .references(() => nights.id),
+  roundNo: int('round_no').notNull(),
+  // 'W' | 'T' | 'L'
+  result: nvarchar({ length: 1 }).notNull(),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
  * Access policy / invite whitelist, managed by the admin from /admin. Invites
  * are created by GitHub login (the only handle known before someone first signs
  * in) and bound to the immutable userId on first login, so access survives a

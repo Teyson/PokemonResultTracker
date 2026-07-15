@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "",
+    "SQL_SERVER": "localhost",
+    "SQL_DATABASE": "pokemonresulttracker",
+    "SQL_USER": "sa",
+    "SQL_PASSWORD": "P@ssw0rd_Local_Dev",
+    "SQL_ENCRYPT": "false",
+    "ADMIN_GITHUB_LOGIN": "Teyson"
+  }
+}

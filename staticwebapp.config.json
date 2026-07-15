@@ -8,6 +8,7 @@
   "routes": [
     { "route": "/login", "redirect": "/.auth/login/github" },
     { "route": "/logout", "redirect": "/.auth/logout" },
+    { "route": "/admin", "rewrite": "/admin.html" },
     { "route": "/api/nights*", "allowedRoles": ["member"] },
     { "route": "/api/users*", "allowedRoles": ["admin"] }
   ],

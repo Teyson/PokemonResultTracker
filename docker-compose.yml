@@ -1,0 +1,28 @@
+# Local-only test database — never used in production/Azure. Gives you a real
+# SQL Server engine on localhost so `swa start` can run the full app (frontend +
+# API + emulated GitHub auth) against something Azure SQL-compatible, without
+# touching the real Azure SQL database.
+#
+# Usage: docker compose up -d   (see README "Local development" section)
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-P@ssw0rd_Local_Dev}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mssql-data:

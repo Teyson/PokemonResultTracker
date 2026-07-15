@@ -18,8 +18,8 @@ export default defineConfig({
     user: process.env.SQL_USER!,
     password: process.env.SQL_PASSWORD!,
     options: {
-      encrypt: true,
-      trustServerCertificate: false
+      encrypt: process.env.SQL_ENCRYPT !== 'false',
+      trustServerCertificate: process.env.SQL_TRUST_SERVER_CERTIFICATE === 'true'
     }
   }
 });

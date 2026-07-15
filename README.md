@@ -169,31 +169,111 @@ objects that already exist. Instead, mark it as already applied:
 
 ## Local development
 
+Runs the whole app — frontend, API, and a real SQL Server database — entirely
+on your machine, served at a `localhost` URL, with **no Azure resources
+involved**. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+and Node 18+.
+
+### 1. One-time setup
+
 ```powershell
-# Requires Node 18+ (SvelteKit/Vite requirement)
 npm install -g @azure/static-web-apps-cli azure-functions-core-tools@4
+
+# Root
+npm install
 
 # API
 cd api
 npm install
-copy local.settings.json.example local.settings.json   # then fill in your SQL_* values
-npm run build
-
-# Frontend (from repo root)
+copy local.settings.docker.json.example local.settings.json
+copy .env.example .env
+# then edit api/.env, uncomment the "Local Docker SQL Server" block (and
+# comment out the Azure SQL_* lines above it)
 cd ..
-npm install
-npm run build
-
-# Full local emulation (frontend + API + emulated GitHub auth/roles)
-swa start build --api-location api
 ```
 
-Note: local GitHub login is emulated by the SWA CLI (you can type any username and
-roles), so you can test the admin/member gates without real auth.
+### 2. Start the local database and apply the schema
 
-For frontend-only iteration without the API, `npm run dev` runs the Vite dev
-server directly (any `/api/*` calls will 404 unless you also run `swa start`
-or point `vite.config.ts` at a running Functions host).
+```powershell
+npm run db:up              # starts the SQL Server container (docker-compose.yml)
+
+cd api
+npm run db:migrate         # creates the decks/nights/allowed_users tables
+npm run seed                # optional — one sample night, same as sql/schema.sql's seed
+cd ..
+```
+
+`npm run db:up` starts a plain `mcr.microsoft.com/mssql/server` container on
+port 1433 with a throwaway local password (see `docker-compose.yml`) — this is
+never the real Azure SQL database. `npm run db:down` (root) stops it; the data
+persists in a Docker volume between runs, so you don't need to re-migrate each
+session unless you reset the container.
+
+### 3. Build and serve
+
+```powershell
+cd api && npm run build && cd ..
+npm run build
+npm run serve               # swa start build --api-location api
+```
+
+The SWA CLI prints the local URL (default `http://localhost:4280`). The
+anonymous **login gate** and the not-yet-whitelisted **pending gate** both work
+correctly through the CLI's emulated GitHub login at `/.auth/login/github`.
+
+> **Known SWA CLI limitation (tested with `@azure/static-web-apps-cli@2.0.9`):**
+> the CLI's config schema validator incorrectly requires `auth.identityProviders`
+> even for the built-in GitHub login this app uses (Microsoft's own docs confirm
+> the built-in provider needs no extra registration — this is a CLI bug, not a
+> problem with `staticwebapp.config.json`). Two effects, **local only, does not
+> affect the real Azure deployment**:
+> 1. The emulated login form doesn't carry the username through to
+>    `/.auth/me`, so you can't fully drive the **member**/**admin** views by
+>    logging in through the browser — worked around below with a dev-only login bar.
+> 2. `allowedRoles` on `/api/*` isn't enforced locally — `/api/nights`/`/api/users`
+>    are reachable without auth. The `/admin` → `/admin.html` rewrite also isn't
+>    applied, but only matters for a *hard* navigation or refresh at `/admin`
+>    (typed URL, bookmark) — clicking the in-app "Manage users" link works fine,
+>    since SvelteKit's client-side router handles it without a server round trip.
+>
+> To exercise `nights`/`users`/`GetRoles` business logic locally, call the raw
+> Functions host directly (bypasses the CLI's auth proxy, same code that runs
+> in production) — `swa start` prints its port, typically `:7071`:
+> ```powershell
+> curl http://localhost:7071/api/nights
+> curl -X POST http://localhost:7071/api/GetRoles -H "Content-Type: application/json" -d '{\"userDetails\":\"Teyson\"}'
+> ```
+
+For frontend-only iteration without the API or database, `npm run dev` runs
+the Vite dev server directly (`/api/*` calls will 404 unless `swa start` or a
+running Functions host is also available).
+
+### Testing the member/admin views: local dev login
+
+Since the CLI's emulated GitHub login doesn't work (above), there's a small
+local-only login bar that lets you pick a role directly and skip GitHub
+entirely:
+
+```powershell
+copy .env.local.example .env.local
+# .env.local is gitignored — never committed, never present in a real deploy
+```
+
+Rebuild (`npm run build`) and reload `npm run serve`. A bar appears at the top
+of every page with **Anonymous** / **Pending** / **Member** / **Admin**
+buttons and a username field — click one and the app immediately renders that
+view, no login flow needed. This is safe to use however you like locally:
+
+- It only fabricates the *frontend's* view of who's signed in. Every
+  `/api/*` call still goes through the real Azure Functions code — nothing
+  about server-side auth changes, so this can't become a real bypass.
+- It's gated by `VITE_LOCAL_DEV_LOGIN`, which only exists in your gitignored
+  `.env.local` — a fresh clone (including the real Azure build) never has it.
+- As a second, independent guard, the bar also refuses to activate anywhere
+  except `localhost`/`127.0.0.1`.
+
+To go back to testing the real (broken) CLI login flow, delete `.env.local`
+and rebuild.
 
 ---
 

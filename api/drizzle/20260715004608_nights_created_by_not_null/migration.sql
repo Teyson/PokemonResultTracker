@@ -1,1 +1,0 @@
-ALTER TABLE [nights] ALTER COLUMN [created_by] nvarchar(100) NOT NULL;

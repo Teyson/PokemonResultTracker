@@ -1,1 +1,0 @@
-ALTER TABLE [nights] ADD [created_by] nvarchar(100);

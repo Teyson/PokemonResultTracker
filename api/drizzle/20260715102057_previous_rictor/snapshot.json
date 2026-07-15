@@ -1,7 +1,7 @@
 {
   "version": "2",
   "dialect": "mssql",
-  "id": "61fdd3ad-8984-4f4b-9e8c-6283bbccb0d2",
+  "id": "1f0e5a0b-2e6a-429f-9bb4-aea8fce7e2ae",
   "prevIds": [
     "d8474916-277c-4bc9-8ff4-371854481db0"
   ],
@@ -18,6 +18,11 @@
     },
     {
       "name": "nights",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "users",
       "entityType": "tables",
       "schema": "dbo"
     },
@@ -40,6 +45,16 @@
       "generated": null,
       "identity": null,
       "name": "github_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
       "schema": "dbo",
       "entityType": "columns",
       "table": "allowed_users"
@@ -191,11 +206,11 @@
       "table": "nights"
     },
     {
-      "type": "nvarchar(100)",
-      "notNull": false,
+      "type": "int",
+      "notNull": true,
       "generated": null,
       "identity": null,
-      "name": "created_by",
+      "name": "owner_id",
       "schema": "dbo",
       "entityType": "columns",
       "table": "nights"
@@ -211,6 +226,49 @@
       "table": "nights"
     },
     {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "github_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
       "columns": [
         "deck_id"
       ],
@@ -223,6 +281,23 @@
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "nights_deck_id_decks_id_fk",
+      "entityType": "fks",
+      "table": "nights",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "owner_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "nights_owner_id_users_id_fk",
       "entityType": "fks",
       "table": "nights",
       "schema": "dbo"
@@ -260,6 +335,16 @@
     {
       "nameExplicit": false,
       "columns": [
+        "id"
+      ],
+      "name": "users_pkey",
+      "table": "users",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "github_login"
       ],
       "name": "allowed_users_github_login_key",
@@ -275,6 +360,16 @@
       "name": "decks_name_key",
       "schema": "dbo",
       "table": "decks",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "name": "users_user_id_key",
+      "schema": "dbo",
+      "table": "users",
       "entityType": "uniques"
     },
     {
@@ -339,6 +434,15 @@
       "entityType": "defaults",
       "schema": "dbo",
       "table": "nights"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "users_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "users"
     }
   ],
   "renames": []

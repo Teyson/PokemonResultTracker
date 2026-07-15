@@ -2,15 +2,35 @@ import { int, nvarchar, date, datetime2, mssqlTable } from 'drizzle-orm/mssql-co
 import { sql } from 'drizzle-orm';
 
 /**
- * Mirrors sql/schema.sql column-for-column. That file stays in the repo as a
- * fresh-install fallback; this schema (and the migrations generated from it)
- * is the source of truth going forward.
+ * Drizzle schema — the source of truth for the database. Migrations under
+ * ./drizzle are generated from this file; sql/schema.sql is only a fresh-install
+ * fallback reference.
  */
 
 export const decks = mssqlTable('decks', {
   id: int().primaryKey().identity(),
   name: nvarchar({ length: 100 }).notNull().unique(),
   energyType: nvarchar('energy_type', { length: 50 }),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
+ * Identity directory for everyone who has actually signed in. Keyed on the
+ * immutable Static Web Apps userId, with the GitHub login stored as a plain
+ * display name that is refreshed on every login. Because nights reference this
+ * table (not a copied-in login string), renaming a GitHub account updates the
+ * name everywhere automatically. Distinct from allowed_users, which is the
+ * admin-managed access policy (who may enter, and with what role).
+ */
+export const users = mssqlTable('users', {
+  id: int().primaryKey().identity(),
+  // Immutable Static Web Apps userId — the stable identity, never changes.
+  userId: nvarchar('user_id', { length: 200 }).notNull().unique(),
+  // Current GitHub login, refreshed on each sign-in. Display only, not unique
+  // (a freed-up login could briefly appear on two rows until both refresh).
+  githubLogin: nvarchar('github_login', { length: 100 }).notNull(),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)
@@ -26,27 +46,28 @@ export const nights = mssqlTable('nights', {
   ties: int().notNull().default(0),
   losses: int().notNull().default(0),
   notes: nvarchar({ length: 500 }),
-  // Ownership identity: the immutable Static Web Apps userId of the creator.
-  // Nullable only to cover legacy rows created before this column existed; new
-  // rows always stamp it. See createdBy for the human-readable display name.
-  createdByUserId: nvarchar('created_by_user_id', { length: 200 }),
-  // Display only: the GitHub login at creation time. Mutable (users can rename),
-  // so it's never used for authorization — createdByUserId is the source of truth.
-  createdBy: nvarchar('created_by', { length: 100 }).notNull(),
+  // Owner: a foreign key into users. The display name comes from the joined
+  // users row, so it always reflects the owner's current GitHub login.
+  ownerId: int('owner_id')
+    .notNull()
+    .references(() => users.id),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)
 });
 
+/**
+ * Access policy / invite whitelist, managed by the admin from /admin. Invites
+ * are created by GitHub login (the only handle known before someone first signs
+ * in) and bound to the immutable userId on first login, so access survives a
+ * GitHub rename. Kept separate from users so that removing an invite here
+ * revokes access without touching the identity/ownership rows in users.
+ */
 export const allowedUsers = mssqlTable('allowed_users', {
   id: int().primaryKey().identity(),
-  // Invites are created by GitHub login (the only identifier a human knows
-  // before the invitee ever signs in). Kept for display and for matching a
-  // not-yet-bound invite on first login.
   githubLogin: nvarchar('github_login', { length: 100 }).notNull().unique(),
-  // Bound on the member's first login (GetRoles stamps it). Once present, the
-  // member is matched by this immutable userId, so a later GitHub rename can't
-  // lock them out or let someone else claim their freed-up login.
+  // Bound on the member's first login; matched by this immutable userId
+  // thereafter so a later GitHub rename can't lock them out.
   userId: nvarchar('user_id', { length: 200 }),
   role: nvarchar({ length: 20 }).notNull().default('member'),
   addedBy: nvarchar('added_by', { length: 100 }),

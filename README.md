@@ -105,11 +105,11 @@ Static Web App resource → **Settings → Environment variables** (a.k.a. Confi
 > under **Manage users**; each member's row is automatically bound to their
 > immutable id the first time they sign in, so member renames don't break either.
 >
-> **Legacy nights.** Rows created before this became id-based have a NULL
-> `created_by_user_id` and fall back to matching by login, so they keep working.
-> They only become fully rename-proof once stamped with an id. If you have such
-> rows and plan to rename your GitHub account, stamp yours first (after setting
-> `ADMIN_USER_ID`): `UPDATE nights SET created_by_user_id = '<your-user-id>' WHERE created_by_user_id IS NULL AND created_by = '<your-login>';`
+> **Renames just work.** Nights are owned by a foreign key into a `users` table
+> keyed on the immutable user id; the GitHub login is stored only as a display
+> name and refreshed on every login. So renaming a GitHub account keeps ownership
+> and access intact and updates the displayed name everywhere automatically — no
+> manual fix-ups.
 
 ### 5. Use it
 
@@ -218,7 +218,7 @@ cd ..
 npm run db:up              # starts the SQL Server container (docker-compose.yml)
 
 cd api
-npm run db:migrate         # creates the decks/nights/allowed_users tables
+npm run db:migrate         # creates the decks/users/nights/allowed_users tables
 npm run seed                # optional — one sample night, same as sql/schema.sql's seed
 cd ..
 ```

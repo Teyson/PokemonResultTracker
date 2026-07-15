@@ -19,6 +19,9 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Migrate Database
+    permissions:
+      id-token: write # required for the OIDC federated login below
+      contents: read
     defaults:
       run:
         working-directory: api
@@ -28,12 +31,43 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      # Azure SQL's firewall rejects everything by default; GitHub-hosted
+      # runners use unpredictable public IPs from a huge range, so a static
+      # allow-list isn't practical. Instead, open a rule for just this run's
+      # IP, migrate, then close it — scoped to the single run, not standing.
+      - name: Determine runner public IP
+        id: ip
+        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+      - name: Azure login (OIDC, no stored secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Open temporary SQL firewall rule for this run
+        run: |
+          az sql server firewall-rule create \
+            --resource-group PokemonResultTracker \
+            --server pokemonresulttracker \
+            --name gh-actions-ci-temp \
+            --start-ip-address ${{ steps.ip.outputs.ip }} \
+            --end-ip-address ${{ steps.ip.outputs.ip }}
+          # Firewall changes can take a few seconds to propagate.
+          sleep 15
       - run: npm run db:migrate
         env:
           SQL_SERVER: ${{ secrets.SQL_SERVER }}
           SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
           SQL_USER: ${{ secrets.SQL_USER }}
           SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+      - name: Close temporary SQL firewall rule
+        if: always()
+        continue-on-error: true
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group PokemonResultTracker \
+            --server pokemonresulttracker \
+            --name gh-actions-ci-temp
 
   build_and_deploy_job:
     needs: [migrate_database]

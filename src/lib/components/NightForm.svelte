@@ -106,7 +106,7 @@
           aria-pressed={!newDeck && deck === d.name}
           onclick={() => selectDeck(d)}
         >
-          <span class="cd" style="background:{colorOf(d.type)}"></span>{d.name}
+          <TypeIcon type={d.type} size={16} />{d.name}
         </button>
       {/each}
       <button type="button" class="dchip new" aria-pressed={newDeck} onclick={selectNewDeck}>+ New deck</button>
@@ -274,12 +274,6 @@
   .dchip:focus-visible {
     outline: 2px solid var(--red);
     outline-offset: 2px;
-  }
-  .dchip .cd {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex: 0 0 auto;
   }
   .dchip[aria-pressed='true'] {
     border-color: var(--red);

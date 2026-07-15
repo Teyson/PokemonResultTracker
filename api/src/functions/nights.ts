@@ -4,12 +4,13 @@ import { eq, sql, desc } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { decks, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
-import { getUser } from '../auth';
+import { getUser, resolveRole } from '../auth';
 import type { NightResponse } from '../types';
 
 /**
- * /api/nights — the league night log. Requires the "member" role (enforced by
- * allowedRoles in staticwebapp.config.json).
+ * /api/nights — the league night log. Requires the "member" role. Free tier
+ * can't gate this at the platform level (allowedRoles only sees "authenticated"
+ * here), so this handler resolves the real role itself via resolveRole().
  *
  *   GET    /api/nights?scope=all   -> NightResponse[] (own nights, or everyone's for admins passing scope=all)
  *   POST   /api/nights             -> create   (body: { date, deck, type, w, t, l })
@@ -115,9 +116,10 @@ app.http('nights', {
     try {
       const user = getUser(request);
       if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-      const isAdmin = user.userRoles.includes('admin');
 
       const db = await getDb();
+      const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+      if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       if (request.method === 'GET') {
         const wantsAll = isAdmin && new URL(request.url).searchParams.get('scope') === 'all';

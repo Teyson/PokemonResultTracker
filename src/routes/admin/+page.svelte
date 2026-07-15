@@ -5,9 +5,10 @@
   import { toast } from '$lib/toast.svelte';
   import Toast from '$lib/components/Toast.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean }>('auth');
-  let roles = $derived(auth.principal?.userRoles ?? []);
-  let isAdmin = $derived(roles.includes('admin'));
+  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
+    'auth'
+  );
+  let isAdmin = $derived(auth.isAdmin);
 
   let data = $state<UsersResponse>({ admin: '', users: [] });
   let loaded = $state(false);

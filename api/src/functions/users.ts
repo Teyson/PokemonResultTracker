@@ -2,19 +2,21 @@ import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } 
 import { eq, sql, asc } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { allowedUsers } from '../db/schema';
-import { getUser } from '../auth';
+import { getUser, resolveRole } from '../auth';
 import type { UsersResponse } from '../types';
 
 /**
- * /api/users — the member whitelist. Admin only (enforced by
- * allowedRoles: ["admin"] in staticwebapp.config.json).
+ * /api/users — the member whitelist. Admin only. Free tier can't gate this at
+ * the platform level (allowedRoles only sees "authenticated" here), so this
+ * handler resolves the real role itself via resolveRole() and rejects non-admins.
  *
  *   GET    /api/users        -> { admin, users: AllowedUserResponse[] }
  *   POST   /api/users        -> add a member   (body: { github_login })
  *   DELETE /api/users/{id}   -> remove a member
  *
- * The admin themselves is defined by the ADMIN_GITHUB_LOGIN app setting, not by
- * a table row, so the admin always has access even before the DB has any rows.
+ * The admin themselves is defined by ADMIN_USER_ID (or, before that's set, the
+ * ADMIN_GITHUB_LOGIN bootstrap fallback), not by a table row, so the admin
+ * always has access even before the DB has any rows.
  */
 
 const LOGIN_PATTERN = /^[A-Za-z0-9-]{1,39}$/;
@@ -31,7 +33,12 @@ app.http('users', {
     const idParam = request.params.id;
     const admin = (process.env.ADMIN_GITHUB_LOGIN ?? '').trim();
     try {
+      const caller = getUser(request);
+      if (!caller) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
+
       const db = await getDb();
+      const { isAdmin } = await resolveRole(db, caller.userId, caller.userDetails, context);
+      if (!isAdmin) return { status: 403, jsonBody: { error: 'Admins only.' } };
 
       if (request.method === 'GET') {
         const rows = await db

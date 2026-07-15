@@ -11,11 +11,12 @@
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean }>('auth');
+  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
+    'auth'
+  );
 
-  let roles = $derived(auth.principal?.userRoles ?? []);
-  let isMember = $derived(roles.includes('member'));
-  let isAdmin = $derived(roles.includes('admin'));
+  let isMember = $derived(auth.isMember);
+  let isAdmin = $derived(auth.isAdmin);
 
   let nights = $state<Night[]>([]);
   let nightsLoaded = $state(false);

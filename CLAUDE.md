@@ -13,6 +13,8 @@ All work happens on a branch — never commit directly to `main`.
   (`src/routes/**`, `src/lib/**`), API functions (`api/src/**`), schema/migration
   changes (`api/src/db/schema.ts`, `api/drizzle/**`), config that affects app
   behavior (`staticwebapp.config.json`).
+- **`fix/<short-description>`** — bug fixes to existing behavior (same file scope
+  as `feature/`).
 
 Branch names use kebab-case after the prefix, e.g. `feature/per-match-logging`,
 `chore/update-readme-deploy-steps`.
@@ -41,7 +43,9 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   connection, `api/src/db/schema.ts` for table definitions). Schema changes go
   through `drizzle-kit`: edit `schema.ts`, run `npm run db:generate` in `api/`
   to produce a migration under `api/drizzle/`, then `npm run db:migrate` to
-  apply it. Don't hand-edit generated migration SQL.
+  apply it. Don't hand-edit generated migration SQL, and never use
+  `npm run db:push` — it applies schema changes directly and bypasses the
+  migration history.
 - Request bodies are validated with Zod schemas colocated in each function file,
   not hand-rolled regex/parsing.
 - `sql/schema.sql` is kept only as a fresh-install fallback reference; it is not
@@ -49,6 +53,19 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
 - Keep naming consistent with the repo name (`PokemonResultTracker` /
   `pokemonresulttracker` for the DB) — don't reintroduce references to the old
   `tuesday-league` prototype this project was migrated from.
+
+## Build & verification
+
+- Frontend type-check: `npm run check` (svelte-check) at the repo root.
+- Frontend build: `npm run build` at the root. API build/type-check:
+  `npm run build` in `api/` (plain `tsc` compiling to `api/dist`).
+- There is **no automated test suite**. The verification bar before opening a
+  PR is: both builds pass, `npm run check` passes, and the affected flow has
+  been exercised manually (or via browser preview) where practical.
+- Full local run: build both, then `npm run serve` at the root (SWA CLI,
+  default `http://localhost:4280`). Frontend-only iteration: `npm run dev`
+  (Vite dev server; `/api/*` calls 404 without a Functions host).
+  `.claude/launch.json` defines both as the `dev` and `serve` preview servers.
 
 ## Local environment quirks
 
@@ -58,3 +75,9 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   `docker.exe` under the Docker Desktop install directory (typically under
   `Program Files\Docker\Docker\resources\bin`) and invoke it by full path. The
   `docker compose` subcommand works the same way via that binary.
+- The SWA CLI's emulated login form at `/.auth/login/github` only persists its
+  fields on a genuine `keyup` DOM event. Browser automation that sets input
+  values programmatically silently falls back to a cached-or-random user id
+  with no username — it looks like a broken login flow but isn't. When testing
+  role-dependent views locally, prefer the `.env.local` dev-login bar (see
+  README, "Testing the member/admin views") over automating that form.

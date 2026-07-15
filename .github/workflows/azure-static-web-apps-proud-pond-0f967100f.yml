@@ -31,13 +31,15 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      # Azure SQL's firewall rejects everything by default; GitHub-hosted
-      # runners use unpredictable public IPs from a huge range, so a static
-      # allow-list isn't practical. Instead, open a rule for just this run's
-      # IP, migrate, then close it — scoped to the single run, not standing.
-      - name: Determine runner public IP
-        id: ip
-        run: echo "ip=$(curl -s https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+      # Azure SQL's firewall rejects everything by default. GitHub-hosted
+      # runners don't have a stable egress IP — even within a single job,
+      # consecutive connections can go out through different addresses from
+      # Azure's outbound NAT pool — and GitHub's published Actions IP ranges
+      # (5000+ CIDR blocks across Azure/AWS/GCP) are too numerous for
+      # per-block firewall rules and too broad to be a meaningful allow-list
+      # anyway. So instead this opens the firewall to all IPs for just the
+      # few seconds this job needs it, then closes it again — the exposure
+      # window is bounded by time (one CI run), not by IP.
       - name: Azure login (OIDC, no stored secret)
         uses: azure/login@v2
         with:
@@ -50,8 +52,8 @@ jobs:
             --resource-group PokemonResultTracker \
             --server pokemonresulttracker \
             --name gh-actions-ci-temp \
-            --start-ip-address ${{ steps.ip.outputs.ip }} \
-            --end-ip-address ${{ steps.ip.outputs.ip }}
+            --start-ip-address 0.0.0.0 \
+            --end-ip-address 255.255.255.255
           # Firewall changes can take a few seconds to propagate.
           sleep 15
       - run: npm run db:migrate

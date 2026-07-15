@@ -10,8 +10,37 @@ on:
       - main
 
 jobs:
+  # Applies any pending Drizzle migrations to the production database before
+  # the new API code is deployed. drizzle-kit migrate tracks already-applied
+  # migrations itself, so this is a no-op push with no new migration files.
+  # Runs only on real merges to main — never on PR preview builds, since those
+  # shouldn't touch the shared production schema.
+  migrate_database:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    name: Migrate Database
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run db:migrate
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
+          SQL_USER: ${{ secrets.SQL_USER }}
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    needs: [migrate_database]
+    if: |
+      always() &&
+      (needs.migrate_database.result == 'success' || needs.migrate_database.result == 'skipped') &&
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:

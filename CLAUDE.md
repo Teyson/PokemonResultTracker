@@ -42,10 +42,16 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
 - Database access goes through Drizzle ORM (`api/src/db/client.ts` for the
   connection, `api/src/db/schema.ts` for table definitions). Schema changes go
   through `drizzle-kit`: edit `schema.ts`, run `npm run db:generate` in `api/`
-  to produce a migration under `api/drizzle/`, then `npm run db:migrate` to
-  apply it. Don't hand-edit generated migration SQL, and never use
-  `npm run db:push` — it applies schema changes directly and bypasses the
-  migration history.
+  to produce a migration under `api/drizzle/`, commit it, and apply it locally
+  with `npm run db:migrate` against the Docker DB to verify it before opening a
+  PR. Don't hand-edit generated migration SQL, and never use `npm run db:push`
+  — it applies schema changes directly and bypasses the migration history.
+  **Production migrations are automatic**: the `migrate_database` job in
+  `.github/workflows/azure-static-web-apps-*.yml` runs `npm run db:migrate`
+  against the production Azure SQL database on every push to `main`, before
+  the API is deployed. `drizzle-kit migrate` tracks already-applied migrations
+  itself, so this is a no-op when a merge has no new migration files — don't
+  run `db:migrate` against production manually.
 - Request bodies are validated with Zod schemas colocated in each function file,
   not hand-rolled regex/parsing.
 - `sql/schema.sql` is kept only as a fresh-install fallback reference; it is not

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Night, NightInput } from '$lib/types';
   import { TYPES, colorOf, recentTuesday } from '$lib/pokemon';
+  import TypeIcon from './TypeIcon.svelte';
 
   let {
     nights,
@@ -125,15 +126,17 @@
     <div class="field" style="margin-bottom:13px;">
       <span class="field-label" id="typeLabel">Type</span>
       <div class="swatches" role="group" aria-labelledby="typeLabel">
-        {#each TYPES as [name, col] (name)}
+        {#each TYPES as [name] (name)}
           <button
             type="button"
             class="sw"
-            style="color:{col};background:{col}"
+            style="color:{colorOf(name)}"
             aria-pressed={type === name}
             title={name}
             onclick={() => (type = name)}
-          ></button>
+          >
+            <TypeIcon type={name} size={26} />
+          </button>
         {/each}
       </div>
     </div>
@@ -221,12 +224,17 @@
   .sw {
     width: 26px;
     height: 26px;
+    box-sizing: content-box;
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: transform 0.08s;
     padding: 0;
+    background: none;
   }
   .sw:active {
     transform: scale(0.9);

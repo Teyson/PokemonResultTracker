@@ -42,7 +42,7 @@
   let w = $state(0);
   let t = $state(0);
   let l = $state(0);
-  let detailed = $state(false);
+  let detailed = $state(true);
   let matchResults = $state<MatchResult[]>([]);
   let saving = $state(false);
 
@@ -68,7 +68,7 @@
       w = 0;
       t = 0;
       l = 0;
-      detailed = false;
+      detailed = true;
       matchResults = [];
     }
   });

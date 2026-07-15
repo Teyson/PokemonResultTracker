@@ -299,12 +299,14 @@ correctly through the CLI's emulated GitHub login at `/.auth/login/github`.
 > cached-or-random ID with no username at all, which looks like "the CLI
 > can't carry the username through" but isn't a real bug for interactive use.
 >
-> To exercise `nights`/`users`/`GetRoles` business logic locally, call the raw
+> To exercise `nights`/`users`/`me` business logic locally, call the raw
 > Functions host directly (bypasses the CLI's auth proxy, same code that runs
-> in production) — `swa start` prints its port, typically `:7071`:
+> in production) — `swa start` prints its port, typically `:7071`. The
+> functions read the caller from the base64-encoded `x-ms-client-principal`
+> header, so pass one to simulate a signed-in user:
 > ```powershell
-> curl http://localhost:7071/api/nights
-> curl -X POST http://localhost:7071/api/GetRoles -H "Content-Type: application/json" -d '{\"userDetails\":\"Teyson\"}'
+> $principal = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"userId":"abc123","userDetails":"Teyson","userRoles":["authenticated"]}'))
+> curl http://localhost:7071/api/me -H "x-ms-client-principal: $principal"
 > ```
 
 For frontend-only iteration without the API or database, `npm run dev` runs

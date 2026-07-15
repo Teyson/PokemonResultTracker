@@ -21,6 +21,9 @@ obj/
 .env.*.local
 api/.env
 
+# Claude Code local settings (machine-specific permissions — launch.json IS committed)
+.claude/settings.local.json
+
 # Editor / OS
 .vscode/
 .DS_Store

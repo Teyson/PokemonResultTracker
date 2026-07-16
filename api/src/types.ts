@@ -29,6 +29,10 @@ export interface DeckSummaryResponse {
   ownerLogin: string | null;
   timesPlayedAgainst: number;
   lastPlayedAgainst: string | null;
+  // Only present for admins: league-wide usage, used by the deck management
+  // page to decide whether a deck can be safely deleted.
+  nightsCount?: number;
+  opponentCount?: number;
 }
 
 export interface AllowedUserResponse {

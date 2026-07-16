@@ -137,6 +137,7 @@
     <div class="wrap">
       <div class="topbar">
         <a class="back" href="/">← Tracker</a>
+        <a class="back" href="/decks">Manage decks</a>
         <a class="back" href="/logout">Sign out</a>
       </div>
       <h1>League members</h1>

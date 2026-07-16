@@ -10,6 +10,7 @@
   import NightForm from '$lib/components/NightForm.svelte';
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
+  import TypeBreakdown from '$lib/components/TypeBreakdown.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
@@ -167,6 +168,8 @@
       <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
 
       <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+
+      <TypeBreakdown {nights} />
 
       <div class="foot">
         <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br />

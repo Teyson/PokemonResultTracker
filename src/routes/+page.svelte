@@ -8,6 +8,7 @@
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
   import Badges from '$lib/components/Badges.svelte';
+  import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
   import NightForm from '$lib/components/NightForm.svelte';
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
@@ -148,6 +149,7 @@
       <Scoreboard {nights} />
       <Records {nights} />
       <Badges {nights} />
+      <CalendarHeatmap {nights} />
       <NightForm
         {nights}
         {decks}

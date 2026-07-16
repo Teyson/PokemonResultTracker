@@ -400,6 +400,8 @@ Lightning decks" for free.
 
 ### 12. Attendance calendar heatmap
 
+> **Status: implemented in PR #40**
+
 **What.** A GitHub-style year grid of Tuesdays, each cell colored by that
 night's PPG (or grey for skipped weeks), with hover/tap showing the date and
 record.

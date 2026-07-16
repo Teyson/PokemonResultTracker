@@ -70,6 +70,44 @@ export function recentTuesday(): string {
   return toISO(d);
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+// UTC-based (not local Date arithmetic) so week/year boundaries land on the
+// same day regardless of the viewer's timezone — see CLAUDE.md pitfalls.
+function toISOUTC(d: Date): string {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+/** All Tuesdays that fall within the given year, chronological, as ISO date strings (UTC). */
+export function tuesdaysOfYear(year: number): string[] {
+  const out: string[] = [];
+  const jan1Day = new Date(Date.UTC(year, 0, 1)).getUTCDay();
+  let d = new Date(Date.UTC(year, 0, 1 + ((2 - jan1Day + 7) % 7)));
+  while (d.getUTCFullYear() === year) {
+    out.push(toISOUTC(d));
+    d = new Date(d.getTime() + 7 * 86400000);
+  }
+  return out;
+}
+
+/**
+ * The nearest Tuesday to an arbitrary ISO date, used to fold nights logged on
+ * a non-Tuesday (the date picker allows any day) into their week's cell on
+ * the attendance heatmap. Ties (impossible for a single weekday target, but
+ * kept explicit) resolve forward.
+ */
+export function nearestTuesday(iso: string): string {
+  const [y, m, dd] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, dd));
+  let delta = 2 - d.getUTCDay();
+  if (delta > 3) delta -= 7;
+  if (delta < -3) delta += 7;
+  d.setUTCDate(d.getUTCDate() + delta);
+  return toISOUTC(d);
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function fmtDate(iso: string): string {

@@ -144,6 +144,8 @@ it's naturally unaffected; just verify. Keep opponent entirely optional.
 
 ### 3. Matchup win-rate matrix
 
+> **Status: implemented in PR #17**
+
 **What.** A grid: your decks as rows, opponent decks as columns, each cell
 showing record and win% for that pairing, color-scaled from red to green.
 

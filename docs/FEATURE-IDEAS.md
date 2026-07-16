@@ -321,7 +321,7 @@ than constructing timezone-sensitive `Date` objects.
 
 ### 10. Streaks, records & milestones
 
-> **Status: implemented**
+> **Status: implemented in PR #32**
 
 **What.** A "Records" panel: current/longest night win-streak (nights with
 positive record), longest match win-streak (with idea 1), best night ever,

@@ -119,7 +119,7 @@ follow the existing `nights` column definitions exactly.
 
 ### 2. Opponent deck tracking
 
-> **Status: implemented**
+> **Status: implemented in PR #15**
 
 **What.** On each match (from idea 1), optionally record what the opponent was
 playing — a deck name + energy type, reusing the `decks` registry.

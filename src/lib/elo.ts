@@ -16,6 +16,13 @@ export interface DeckRating {
 // only ever carry a name, no owner) already get tracked the same flat way in
 // the matchup breakdown. Two different owners playing "Charizard" contribute
 // to and read the same rating.
+//
+// Known conflict, left unresolved deliberately (see docs/FEATURE-IDEAS.md,
+// idea 6): decks.ownerId models a deck as one player's own build, so two
+// players naming the same archetype differently ("Gardevoir" vs
+// "Gard/Kirlia") won't unify here, and cross-owner deck merging can't fix it
+// either — upsertOwnedDeck only matches within the calling player's own
+// ownerId. Revisit only if this causes real confusion in practice.
 export function normalizeDeckName(name: string): string {
   return name.trim().toLowerCase();
 }

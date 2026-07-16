@@ -210,7 +210,26 @@ instead, so quick-logged matches (no games) stay first-class.
 
 ### 6. Deck Elo rating
 
-> **Status: implemented in PR #38.**
+> **Status: implemented in PR #38, but with an open deck-identity conflict —
+> not clean-closed.** Ratings are keyed by deck name only (trimmed,
+> case-insensitive), same as this idea's own scoping and the same convention
+> the pre-existing matchup/opponent-type breakdowns (ideas 2–3) already use.
+> Left as-is for now — this is a small casual league, and it hasn't caused
+> confusion in practice — but it's a real conflict with how the rest of the
+> app models a deck: `decks.ownerId` + the `decks_owner_id_name_unique`
+> constraint (scoped *per owner*, not globally) deliberately treat a deck as
+> one player's own build, specifically so two players can each have their own
+> "Charizard ex" without colliding. Elo (and matchups) instead treat opponent
+> decks as one flat, ownerless, name-matched pool. Two players naming the same
+> archetype differently ("Gardevoir" vs "Gard/Kirlia") won't unify under
+> either scheme today. Cross-owner merging is **not** a fix — `upsertOwnedDeck`
+> (`api/src/db/decks.ts`) only ever matches within the calling player's own
+> `ownerId`, so the very next night either player logs under that name
+> recreates a fresh separate deck and quietly un-merges it. If this starts to
+> matter in practice, the properly-scoped fix is a separate archetype identity
+> (e.g. a canonical card chosen via a card-search API, per idea 25) layered on
+> top of per-player decks — not forcing decks to be shared/multi-owned, and
+> not something to build preemptively.
 
 **What.** An Elo-style rating per deck, updated match-by-match when an opponent
 deck is recorded, shown as a column in `DeckTable` and a line on the deck detail

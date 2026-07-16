@@ -568,13 +568,13 @@
     margin-bottom: 5px;
   }
   .stepper.w .lab {
-    color: var(--win);
+    color: var(--win-text);
   }
   .stepper.t .lab {
-    color: var(--tie);
+    color: var(--tie-text);
   }
   .stepper.l .lab {
-    color: var(--loss);
+    color: var(--loss-text);
   }
   .stepper .ctl {
     display: flex;

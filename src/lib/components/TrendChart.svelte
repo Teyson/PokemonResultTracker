@@ -38,7 +38,7 @@
           y1={avgY}
           x2={width}
           y2={avgY}
-          stroke="#f6c945"
+          style="stroke: var(--gold)"
           stroke-width="1"
           stroke-dasharray="3 4"
           opacity="0.55"
@@ -50,12 +50,14 @@
           x={barX(i) + BW / 2}
           y={barY(n) - 4}
           text-anchor="middle"
-          fill="#c9cce0"
+          style="fill: var(--text)"
           font-size="9"
           font-family="'Chakra Petch',sans-serif"
           font-weight="600">{ppg(n).toFixed(1)}</text
         >
-        <text x={barX(i) + BW / 2} y={H} text-anchor="middle" fill="#767c96" font-size="9">{fmtShort(n.date)}</text>
+        <text x={barX(i) + BW / 2} y={H} text-anchor="middle" style="fill: var(--muted)" font-size="9"
+          >{fmtShort(n.date)}</text
+        >
       {/each}
     </svg>
   </div>

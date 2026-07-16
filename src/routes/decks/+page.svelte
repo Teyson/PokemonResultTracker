@@ -6,6 +6,7 @@
   import { TYPES, colorOf } from '$lib/pokemon';
   import TypeIcon from '$lib/components/TypeIcon.svelte';
   import Toast from '$lib/components/Toast.svelte';
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -168,6 +169,7 @@
         <a class="back" href="/">← Tracker</a>
         <a class="back" href="/admin">Manage users</a>
         <a class="back" href="/logout">Sign out</a>
+        <ThemeToggle />
       </div>
       <h1>Deck registry</h1>
       <div class="sub">
@@ -325,7 +327,7 @@
     margin-bottom: 10px;
   }
   .search::placeholder {
-    color: #565b74;
+    color: var(--muted2);
   }
   .search:focus {
     outline: none;

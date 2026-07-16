@@ -26,12 +26,29 @@
     else next.add(id);
     expanded = next;
   }
+
+  const PAGE_SIZES = [5, 10, 25, 50, 100, Infinity];
+
+  let pageSize = $state(5);
+  let page = $state(1);
+
+  let totalPages = $derived(Math.max(1, Math.ceil(nights.length / pageSize)));
+  let pagedNights = $derived(nights.slice((page - 1) * pageSize, page * pageSize));
+
+  $effect(() => {
+    if (page > totalPages) page = totalPages;
+  });
+
+  function setPageSize(value: string) {
+    pageSize = value === 'all' ? Infinity : Number(value);
+    page = 1;
+  }
 </script>
 
 {#if nights.length === 0}
   <div class="card empty">No nights logged yet.<br />Fill in above and hit <b>Log night</b>.</div>
 {:else}
-  {#each nights as n (n.id)}
+  {#each pagedNights as n (n.id)}
     <div class="night">
       <div class="spine" style="background:{colorOf(n.type)}"></div>
       <div class="content">
@@ -90,6 +107,24 @@
       </div>
     </div>
   {/each}
+  <div class="pagination">
+    <label class="pagesize">
+      Show
+      <select value={pageSize === Infinity ? 'all' : String(pageSize)} onchange={(e) => setPageSize(e.currentTarget.value)}>
+        {#each PAGE_SIZES as size}
+          <option value={size === Infinity ? 'all' : String(size)}>{size === Infinity ? 'All' : size}</option>
+        {/each}
+      </select>
+      per page
+    </label>
+    {#if totalPages > 1}
+      <div class="pager">
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onclick={() => (page -= 1)}>‹</button>
+        <span class="pageinfo">Page {page} of {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onclick={() => (page += 1)}>›</button>
+      </div>
+    {/if}
+  </div>
 {/if}
 
 <style>
@@ -309,5 +344,62 @@
     .night .stats {
       gap: 10px;
     }
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    padding: 4px 2px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .pagesize {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pagesize select {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 3px 6px;
+    cursor: pointer;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pageinfo {
+    font-variant-numeric: tabular-nums;
+  }
+  .pager button {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .pager button:disabled {
+    color: var(--muted2);
+    cursor: default;
+    opacity: 0.5;
+  }
+  .pager button:not(:disabled):active {
+    background: var(--panel2);
+  }
+  .pager button:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
   }
 </style>

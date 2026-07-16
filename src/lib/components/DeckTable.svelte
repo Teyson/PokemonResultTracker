@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { colorOf, nightlyPpgSeries, ppg } from '$lib/pokemon';
+  import { colorOf, fmtDate, nightlyPpgSeries, ppg } from '$lib/pokemon';
   import { slide } from 'svelte/transition';
   import TypeIcon from './TypeIcon.svelte';
   import Sparkline from './Sparkline.svelte';
+  import TrendChart from './TrendChart.svelte';
 
   const FORM_WINDOW = 8;
 
@@ -106,6 +107,18 @@
     expanded = next;
   }
 
+  // Trend/history are the sections most likely to grow large (a full chart, a
+  // whole season of nights), so they stay collapsed inside the foldout by
+  // default rather than always rendering alongside the compact stat sections.
+  let expandedSections = $state<Set<string>>(new Set());
+
+  function toggleSection(id: string) {
+    const next = new Set(expandedSections);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedSections = next;
+  }
+
   function games(r: WTL): number {
     return r.w + r.t + r.l;
   }
@@ -206,6 +219,8 @@
       {#if expanded.has(d.key)}
         {@const opponents = sortedOpponents(d)}
         {@const opponentTypes = sortedOpponentTypes(d)}
+        {@const trendId = `${d.key}:trend`}
+        {@const historyId = `${d.key}:history`}
         <div class="aggrow" transition:slide={{ duration: 220 }}>
           <div class="agg-section">
             <div class="agg-lab">Turn order</div>
@@ -292,6 +307,49 @@
               </div>
             {:else}
               <div class="to-empty">No opponent types logged yet.</div>
+            {/if}
+          </div>
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
+              aria-expanded={expandedSections.has(trendId)}
+              onclick={() => toggleSection(trendId)}
+            >
+              <span class="agg-lab">Trend</span>
+              <span class="sub-chev">{expandedSections.has(trendId) ? '▴' : '▾'}</span>
+            </button>
+            {#if expandedSections.has(trendId)}
+              <div transition:slide={{ duration: 200 }}>
+                {#if d.history.length >= 2}
+                  <TrendChart nights={d.history} avg={g ? (p / g).toFixed(2) : '—'} />
+                {:else}
+                  <div class="to-empty">Not enough nights yet for a trend — needs at least 2.</div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
+              aria-expanded={expandedSections.has(historyId)}
+              onclick={() => toggleSection(historyId)}
+            >
+              <span class="agg-lab">History ({d.history.length})</span>
+              <span class="sub-chev">{expandedSections.has(historyId) ? '▴' : '▾'}</span>
+            </button>
+            {#if expandedSections.has(historyId)}
+              <div class="hist-table" transition:slide={{ duration: 200 }}>
+                {#each d.history as n (n.id)}
+                  <div class="hist-row">
+                    <span class="hist-date">{fmtDate(n.date)}</span>
+                    <span class="hist-rec">{n.w}-{n.t}-{n.l}</span>
+                    <span class="hist-ppg">{ppg(n).toFixed(2)}</span>
+                    {#if n.notes}<span class="hist-notes">{n.notes}</span>{/if}
+                  </div>
+                {/each}
+              </div>
             {/if}
           </div>
         </div>
@@ -530,5 +588,73 @@
     font-weight: 400;
     font-family: inherit;
     font-size: 11px;
+  }
+  .subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sub-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+  .sub-toggle .agg-lab {
+    margin-bottom: 0;
+  }
+  .sub-chev {
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .sub-toggle:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .hist-table {
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .hist-row {
+    display: grid;
+    grid-template-columns: 74px 52px 40px 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11.5px;
+  }
+  .hist-row:last-child {
+    border-bottom: none;
+  }
+  .hist-date {
+    color: var(--muted);
+  }
+  .hist-rec {
+    font-family: var(--display);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .hist-ppg {
+    font-family: var(--display);
+    font-weight: 700;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .hist-notes {
+    color: var(--muted2);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
 </style>

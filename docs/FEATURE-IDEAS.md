@@ -344,6 +344,13 @@ maybe not "unbeaten" streaks (track both, label precisely).
 
 ### 11. Energy-type performance breakdown
 
+> **Status: superseded.** Built as a standalone panel in PR #34, then
+> deliberately removed in favor of the opponent-type breakdown inside each
+> deck's foldout (same PR) — that answers a more useful question ("how does
+> *this* deck do into Fire decks") than the original scope ("how do my
+> Psychic decks do overall"). The original standalone panel is not on `main`;
+> pick this idea back up if the original framing is still wanted.
+
 **What.** Aggregate results by the deck's energy type: a per-type record/PPG bar
 list or small multiples, colored with the existing type palette.
 

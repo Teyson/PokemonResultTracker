@@ -99,8 +99,31 @@
     return g ? Math.round(((r.w * 3 + r.t) / (g * 3)) * 100) : null;
   }
 
+  type MatchupSortKey = 'name' | 'record' | 'score' | 'ppg';
+  let matchupSort = $state<{ key: MatchupSortKey; dir: 1 | -1 }>({ key: 'record', dir: -1 });
+
+  function toggleMatchupSort(key: MatchupSortKey) {
+    matchupSort =
+      matchupSort.key === key
+        ? { key, dir: matchupSort.dir === 1 ? -1 : 1 }
+        : { key, dir: key === 'name' ? 1 : -1 };
+  }
+
+  function matchupSortArrow(key: MatchupSortKey): string {
+    if (matchupSort.key !== key) return '';
+    return matchupSort.dir === 1 ? ' ▲' : ' ▼';
+  }
+
   function sortedOpponents(d: DeckAgg): MatchupCell[] {
-    return [...d.opponents.values()].sort((a, b) => games(b) - games(a));
+    const { key, dir } = matchupSort;
+    return [...d.opponents.values()].sort((a, b) => {
+      let cmp = 0;
+      if (key === 'name') cmp = a.name.localeCompare(b.name);
+      else if (key === 'record') cmp = games(a) - games(b);
+      else if (key === 'score') cmp = (scorePct(a) ?? -1) - (scorePct(b) ?? -1);
+      else cmp = ppg(a) - ppg(b);
+      return cmp * dir;
+    });
   }
 
   // Percent used to color-code a matchup value — PPG is rescaled from its
@@ -164,7 +187,10 @@
             {#if opponents.length > 0}
               <div class="mu-table">
                 <div class="mu-row mu-head">
-                  <span>Opponent</span><span>Record</span><span>Score%</span><span>PPG</span>
+                  <button type="button" onclick={() => toggleMatchupSort('name')}>Opponent{matchupSortArrow('name')}</button>
+                  <button type="button" onclick={() => toggleMatchupSort('record')}>Record{matchupSortArrow('record')}</button>
+                  <button type="button" onclick={() => toggleMatchupSort('score')}>Score%{matchupSortArrow('score')}</button>
+                  <button type="button" onclick={() => toggleMatchupSort('ppg')}>PPG{matchupSortArrow('ppg')}</button>
                 </div>
                 {#each opponents as opp (opp.name)}
                   {@const g = games(opp)}
@@ -375,13 +401,22 @@
   .mu-row.mu-head {
     background: rgba(0, 0, 0, 0.22);
   }
-  .mu-row.mu-head span {
+  .mu-row.mu-head button {
+    font-family: inherit;
     font-size: 9px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
   }
-  .mu-row.mu-head span:not(:first-child) {
+  .mu-row.mu-head button:hover {
+    color: var(--text);
+  }
+  .mu-row.mu-head button:not(:first-child) {
     text-align: right;
   }
   .mu-name {

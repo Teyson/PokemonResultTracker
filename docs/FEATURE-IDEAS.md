@@ -528,6 +528,8 @@ idea — call it out explicitly.
 
 ### 20. Soft delete with undo
 
+> **Status: implemented in PR #25**
+
 **What.** Deleting a night flags it instead of removing it; the toast becomes
 "Night deleted — Undo" for ~6 s; an admin can see/restore recently deleted
 nights.

@@ -1,6 +1,6 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { z } from 'zod';
-import { eq, inArray, asc, desc } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/mssql-core';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
@@ -14,10 +14,16 @@ import type { MatchResponse, NightResponse } from '../types';
  * can't gate this at the platform level (allowedRoles only sees "authenticated"
  * here), so this handler resolves the real role itself via resolveRole().
  *
- *   GET    /api/nights?scope=all   -> NightResponse[] (own nights, or everyone's for admins passing scope=all)
- *   POST   /api/nights             -> create   (body: { date, deck, type, w, t, l })
- *   PUT    /api/nights/{id}        -> update   (own nights only, unless admin)
- *   DELETE /api/nights/{id}        -> delete   (own nights only, unless admin)
+ *   GET    /api/nights?scope=all       -> NightResponse[] (own nights, or everyone's for admins passing scope=all)
+ *   GET    /api/nights?scope=deleted   -> NightResponse[] (admin only: recently soft-deleted nights, newest first)
+ *   POST   /api/nights                 -> create   (body: { date, deck, type, w, t, l })
+ *   PUT    /api/nights/{id}            -> update   (own nights only, unless admin)
+ *   DELETE /api/nights/{id}            -> soft-delete (own nights only, unless admin)
+ *   POST   /api/nights/{id}/restore    -> undo a soft-delete (own nights only, unless admin)
+ *
+ * Deleting a night sets deleted_at instead of removing the row (and leaves its
+ * matches untouched), so a delete can be undone via restore. Every read path
+ * filters deleted_at IS NULL except the scope=deleted admin view.
  *
  * Each night is owned via owner_id, a foreign key into the users table. Identity
  * is the immutable Static Web Apps userId behind that row, so a creator renaming
@@ -83,6 +89,10 @@ const SELECT_COLUMNS = {
   createdBy: users.githubLogin
 };
 
+// Only selected for the admin scope=deleted view — deletedAt is never exposed
+// on the normal (active) night responses.
+const DELETED_SELECT_COLUMNS = { ...SELECT_COLUMNS, deletedAt: nights.deletedAt };
+
 type Db = Awaited<ReturnType<typeof getDb>>;
 // Either the top-level db handle or the transaction handle passed into a
 // db.transaction() callback — writeMatches runs under both.
@@ -98,8 +108,15 @@ function toResponse(row: {
   l: number;
   notes: string | null;
   createdBy: string;
+  deletedAt?: Date | null;
 }): NightResponse {
-  return { ...row, id: String(row.id), type: row.type ?? 'Colorless' };
+  const { deletedAt, ...rest } = row;
+  return {
+    ...rest,
+    id: String(row.id),
+    type: row.type ?? 'Colorless',
+    ...(deletedAt ? { deletedAt: deletedAt.toISOString() } : {})
+  };
 }
 
 /** Totals derived from a detailed-mode match list, authoritative over the raw w/t/l fields. */
@@ -216,23 +233,28 @@ async function selectNight(db: Db, id: number): Promise<NightResponse | undefine
   return night;
 }
 
-/** Look up a night's owner userId (via the users FK), for the ownership check. */
-async function ownerUserIdOf(db: Db, id: number): Promise<string | undefined> {
+/** Look up a night's owner userId (via the users FK) and delete-state, for ownership/visibility checks. */
+async function nightOwnerState(db: Db, id: number): Promise<{ ownerUserId: string; deletedAt: Date | null } | undefined> {
   const rows = await db
-    .select({ ownerUserId: users.userId })
+    .select({ ownerUserId: users.userId, deletedAt: nights.deletedAt })
     .from(nights)
     .innerJoin(users, eq(users.id, nights.ownerId))
     .where(eq(nights.id, id));
-  return rows[0]?.ownerUserId;
+  return rows[0];
 }
 
 app.http('nights', {
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   authLevel: 'anonymous',
-  route: 'nights/{id?}',
+  route: 'nights/{id?}/{action?}',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     const idParam = request.params.id;
+    const actionParam = request.params.action;
     try {
+      // The only defined action route is POST /api/nights/{id}/restore.
+      if (actionParam && !(request.method === 'POST' && actionParam === 'restore')) {
+        return { status: 400, jsonBody: { error: 'Unknown action.' } };
+      }
       const user = getUser(request);
       if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
 
@@ -241,13 +263,27 @@ app.http('nights', {
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       if (request.method === 'GET') {
-        const wantsAll = isAdmin && new URL(request.url).searchParams.get('scope') === 'all';
+        const scope = new URL(request.url).searchParams.get('scope');
+
+        if (scope === 'deleted') {
+          if (!isAdmin) return { status: 403, jsonBody: { error: 'Admin only.' } };
+          const rows = await db
+            .select(DELETED_SELECT_COLUMNS)
+            .from(nights)
+            .innerJoin(decks, eq(decks.id, nights.deckId))
+            .innerJoin(users, eq(users.id, nights.ownerId))
+            .where(isNotNull(nights.deletedAt))
+            .orderBy(desc(nights.deletedAt));
+          return { jsonBody: rows.map((row) => toResponse(row)) };
+        }
+
+        const wantsAll = isAdmin && scope === 'all';
         const rows = await db
           .select(SELECT_COLUMNS)
           .from(nights)
           .innerJoin(decks, eq(decks.id, nights.deckId))
           .innerJoin(users, eq(users.id, nights.ownerId))
-          .where(wantsAll ? undefined : eq(users.userId, user.userId))
+          .where(wantsAll ? isNull(nights.deletedAt) : and(eq(users.userId, user.userId), isNull(nights.deletedAt)))
           .orderBy(desc(nights.playedOn), desc(nights.id));
         const matchesByNight = await fetchMatchesFor(
           db,
@@ -266,16 +302,25 @@ app.http('nights', {
       if (request.method === 'DELETE') {
         if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
         const id = Number(idParam);
-        const ownerUserId = await ownerUserIdOf(db, id);
-        if (ownerUserId === undefined) return { status: 404, jsonBody: { error: 'Night not found.' } };
-        if (!isAdmin && ownerUserId !== user.userId) {
+        const state = await nightOwnerState(db, id);
+        if (!state || state.deletedAt) return { status: 404, jsonBody: { error: 'Night not found.' } };
+        if (!isAdmin && state.ownerUserId !== user.userId) {
           return { status: 403, jsonBody: { error: 'You can only delete your own nights.' } };
         }
-        await db.transaction(async (tx) => {
-          await tx.delete(matches).where(eq(matches.nightId, id));
-          await tx.delete(nights).where(eq(nights.id, id));
-        });
+        await db.update(nights).set({ deletedAt: new Date() }).where(eq(nights.id, id));
         return { status: 204 };
+      }
+
+      if (actionParam === 'restore') {
+        if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
+        const id = Number(idParam);
+        const state = await nightOwnerState(db, id);
+        if (!state || !state.deletedAt) return { status: 404, jsonBody: { error: 'Night not found.' } };
+        if (!isAdmin && state.ownerUserId !== user.userId) {
+          return { status: 403, jsonBody: { error: 'You can only restore your own nights.' } };
+        }
+        await db.update(nights).set({ deletedAt: null }).where(eq(nights.id, id));
+        return { jsonBody: await selectNight(db, id) };
       }
 
       let raw: unknown;
@@ -325,9 +370,9 @@ app.http('nights', {
       // PUT
       if (!idParam) return { status: 400, jsonBody: { error: 'Missing night id.' } };
       const id = Number(idParam);
-      const ownerUserId = await ownerUserIdOf(db, id);
-      if (ownerUserId === undefined) return { status: 404, jsonBody: { error: 'Night not found.' } };
-      if (!isAdmin && ownerUserId !== user.userId) {
+      const state = await nightOwnerState(db, id);
+      if (!state || state.deletedAt) return { status: 404, jsonBody: { error: 'Night not found.' } };
+      if (!isAdmin && state.ownerUserId !== user.userId) {
         return { status: 403, jsonBody: { error: 'You can only edit your own nights.' } };
       }
       await db.transaction(async (tx) => {

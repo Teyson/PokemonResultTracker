@@ -1,0 +1,1 @@
+ALTER TABLE [nights] ADD [deleted_at] datetime2;

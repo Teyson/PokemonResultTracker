@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { colorOf, ppg } from '$lib/pokemon';
+  import { ppg } from '$lib/pokemon';
   import { slide } from 'svelte/transition';
+  import TypeIcon from './TypeIcon.svelte';
 
   let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
@@ -180,7 +181,7 @@
       {@const hasTurnOrder = games(d.first) + games(d.second) >= 3}
       <div class="drow">
         <div class="dname">
-          <span class="dot" style="background:{colorOf(d.type)}"></span><span class="dname-text">{d.deck}</span>
+          <TypeIcon type={d.type} size={16} /><span class="dname-text">{d.deck}</span>
           {#if showOwner}<span class="owner">· {d.owner}</span>{/if}
         </div>
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
@@ -267,9 +268,7 @@
                   {@const pct = scorePct(opp)}
                   {@const ppgVal = ppg(opp)}
                   <div class="mu-row">
-                    <span class="mu-name"
-                      ><span class="dot" style="background:{colorOf(opp.name)}"></span>{opp.name}</span
-                    >
+                    <span class="mu-name"><TypeIcon type={opp.name} size={16} />{opp.name}</span>
                     <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
                     <span
                       class="mu-val"
@@ -347,12 +346,6 @@
     font-weight: 600;
     font-size: 14px;
     min-width: 0;
-  }
-  .drow .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex: 0 0 auto;
   }
   .drow .dname-text {
     overflow: hidden;
@@ -500,12 +493,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .mu-name .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex: 0 0 auto;
   }
   .mu-rec {
     font-family: var(--display);

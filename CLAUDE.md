@@ -103,3 +103,17 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   verifying against it. Don't shut it down when done — leave it running for next
   time. Only start a fresh one (`preview_start` with `serve`) if nothing answers
   on port 4280.
+- That reuse advice assumes your Browser-pane tools can actually reach the
+  other session's server. They sometimes can't: if `preview_start` reports the
+  port is held by "another chat's dev server" and the tool warns your Browser
+  tools won't reach it, that's a hard session-isolation boundary in the
+  harness, not something `navigate` can route around — don't bother trying
+  `http://localhost:4280` directly first, it will fail the same way. In that
+  case start your own instance on a different port: temporarily edit
+  `.claude/launch.json`'s `serve` entry to pass explicit `--port`/`--api-port`
+  flags (the SWA CLI ignores a `PORT` env var and otherwise prompts
+  interactively when 4280 is taken, which hangs a backgrounded process), run
+  `preview_start`, and **revert `launch.json` back to the default 4280/7071
+  once done** — it's a per-session workaround, not a repo change, and leaving
+  it edited would confuse the next session (or the human) expecting the
+  documented default port.

@@ -32,20 +32,29 @@ function expected(a: number, b: number): number {
   return 1 / (1 + 10 ** ((b - a) / 400));
 }
 
-interface RatingEvent {
-  deckKey: string;
-  name: string;
-  ratingAfter: number;
+export interface MatchRatingEvent {
+  /** Date of the night the match was played on (ISO YYYY-MM-DD). */
+  date: string;
+  ownDeckKey: string;
+  ownName: string;
+  oppDeckKey: string;
+  oppName: string;
+  /** Ratings going into the match — what "opponent strength at the time" means. */
+  ownBefore: number;
+  oppBefore: number;
+  ownAfter: number;
+  oppAfter: number;
+  result: 'W' | 'T' | 'L';
 }
 
 // Replays every match that has an opponent deck recorded, in chronological
 // order (night date, then night id, then round number within the night —
 // the same tie-break `sortedByDate` uses elsewhere), and emits one event per
-// deck per match with that deck's rating immediately after the update.
-// Matches without an opponent deck don't move any rating and are skipped.
-function replay(nights: Night[]): RatingEvent[] {
+// match with both decks' ratings before and after the update. Matches
+// without an opponent deck don't move any rating and are skipped.
+export function replayMatches(nights: Night[]): MatchRatingEvent[] {
   const ratings = new Map<string, DeckRating>();
-  const events: RatingEvent[] = [];
+  const events: MatchRatingEvent[] = [];
 
   function get(name: string): DeckRating {
     const key = normalize(name);
@@ -63,14 +72,26 @@ function replay(nights: Night[]): RatingEvent[] {
       if (!m.opponentDeck) continue;
       const own = get(night.deck);
       const opp = get(m.opponentDeck);
+      const ownBefore = own.rating;
+      const oppBefore = opp.rating;
       const score = m.result === 'W' ? 1 : m.result === 'T' ? 0.5 : 0;
-      const expOwn = expected(own.rating, opp.rating);
+      const expOwn = expected(ownBefore, oppBefore);
       own.rating += K * (score - expOwn);
       opp.rating += K * (1 - score - (1 - expOwn));
       own.games++;
       opp.games++;
-      events.push({ deckKey: normalize(night.deck), name: night.deck, ratingAfter: own.rating });
-      events.push({ deckKey: normalize(m.opponentDeck), name: m.opponentDeck, ratingAfter: opp.rating });
+      events.push({
+        date: night.date,
+        ownDeckKey: normalize(night.deck),
+        ownName: night.deck,
+        oppDeckKey: normalize(m.opponentDeck),
+        oppName: m.opponentDeck,
+        ownBefore,
+        oppBefore,
+        ownAfter: own.rating,
+        oppAfter: opp.rating,
+        result: m.result
+      });
     }
   }
 
@@ -80,8 +101,9 @@ function replay(nights: Night[]): RatingEvent[] {
 /** Current Elo rating for every deck that has appeared in a match with an opponent deck recorded. */
 export function deckElo(nights: Night[]): Map<string, DeckRating> {
   const map = new Map<string, DeckRating>();
-  for (const e of replay(nights)) {
-    map.set(e.deckKey, { name: e.name, rating: e.ratingAfter, games: (map.get(e.deckKey)?.games ?? 0) + 1 });
+  for (const e of replayMatches(nights)) {
+    map.set(e.ownDeckKey, { name: e.ownName, rating: e.ownAfter, games: (map.get(e.ownDeckKey)?.games ?? 0) + 1 });
+    map.set(e.oppDeckKey, { name: e.oppName, rating: e.oppAfter, games: (map.get(e.oppDeckKey)?.games ?? 0) + 1 });
   }
   return map;
 }
@@ -89,8 +111,10 @@ export function deckElo(nights: Night[]): Map<string, DeckRating> {
 /** One deck's rating after each of its Elo-rated matches, oldest to newest — for a rating trend sparkline. */
 export function deckRatingTrend(nights: Night[], deckName: string, limit: number): number[] {
   const key = normalize(deckName);
-  return replay(nights)
-    .filter((e) => e.deckKey === key)
-    .map((e) => e.ratingAfter)
-    .slice(-limit);
+  const out: number[] = [];
+  for (const e of replayMatches(nights)) {
+    if (e.ownDeckKey === key) out.push(e.ownAfter);
+    if (e.oppDeckKey === key) out.push(e.oppAfter);
+  }
+  return out.slice(-limit);
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
   import { fmtDate } from '$lib/pokemon';
-  import { computeBadges } from '$lib/achievements';
+  import { computeBadges, type Badge } from '$lib/achievements';
   import { slide } from 'svelte/transition';
 
   let { nights }: { nights: Night[] } = $props();
@@ -9,6 +9,27 @@
   let badges = $derived(computeBadges(nights));
   let earnedCount = $derived(badges.filter((b) => b.earned).length);
   let open = $state(false);
+  let showAll = $state(false);
+
+  // Collapsed view: every earned badge plus the 3 unearned ones you're
+  // closest to, so the grid stays scannable as the badge list grows.
+  const CLOSEST_UNEARNED = 3;
+
+  function closeness(b: Badge): number {
+    return b.progress ? b.progress.current / b.progress.target : 0;
+  }
+
+  let closestIds = $derived(
+    new Set(
+      badges
+        .filter((b) => !b.earned)
+        .sort((a, b) => closeness(b) - closeness(a))
+        .slice(0, CLOSEST_UNEARNED)
+        .map((b) => b.id)
+    )
+  );
+  let visible = $derived(showAll ? badges : badges.filter((b) => b.earned || closestIds.has(b.id)));
+  let collapsible = $derived(badges.some((b) => !b.earned && !closestIds.has(b.id)));
 </script>
 
 {#if nights.length > 0}
@@ -19,7 +40,7 @@
   </div>
   {#if open}
     <div class="badges" transition:slide={{ duration: 220 }}>
-      {#each badges as b (b.id)}
+      {#each visible as b (b.id)}
         <div class="card" class:earned={b.earned}>
           <div class="emoji">{b.emoji}</div>
           <div class="name">{b.name}</div>
@@ -37,6 +58,11 @@
         </div>
       {/each}
     </div>
+    {#if collapsible}
+      <button class="show-all" transition:slide={{ duration: 220 }} onclick={() => (showAll = !showAll)}>
+        {showAll ? 'Show fewer' : `Show all ${badges.length} badges`}
+      </button>
+    {/if}
   {/if}
 {/if}
 
@@ -131,5 +157,22 @@
   }
   .status.earned-on {
     color: var(--gold);
+  }
+  .show-all {
+    display: block;
+    margin: 10px auto 0;
+    font-family: inherit;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+  .show-all:hover {
+    color: var(--text);
+    border-color: var(--muted2);
   }
 </style>

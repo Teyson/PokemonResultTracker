@@ -103,3 +103,21 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   verifying against it. Don't shut it down when done — leave it running for next
   time. Only start a fresh one (`preview_start` with `serve`) if nothing answers
   on port 4280.
+- `preview_start` may still refuse to start a *new* tracked server on port
+  4280 if another session already registered one there — that's a bookkeeping
+  restriction (it won't hand you `preview_stop`/`preview_logs` control over a
+  process another session owns), **not** a sign the URL is unreachable.
+  Navigating your Browser pane straight to `http://localhost:4280` works fine
+  even then — verify with `navigate` before concluding otherwise; don't take
+  a port-conflict error as proof the page itself is unreachable. Only if a
+  direct `navigate` genuinely fails (e.g. connection refused, nothing
+  actually listening) should you fall back to running your own instance on
+  different ports: temporarily edit `.claude/launch.json`'s `serve` entry to
+  pass explicit `--port`/`--api-port` flags — e.g. `4290`/`7081` as a
+  conventional fallback pair, so you're not inventing one on the spot (the
+  SWA CLI ignores a `PORT` env var and otherwise prompts interactively when
+  4280 is taken, which hangs a backgrounded process) — then revert
+  `launch.json` back to the default 4280/7071 once done. Either way, **never**
+  try to free port 4280 (or 7071) by finding and killing whatever process is
+  bound to it — it's someone else's real dev server with real in-progress
+  state, not a stale leftover.

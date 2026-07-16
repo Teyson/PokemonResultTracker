@@ -107,13 +107,22 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   other session's server. They sometimes can't: if `preview_start` reports the
   port is held by "another chat's dev server" and the tool warns your Browser
   tools won't reach it, that's a hard session-isolation boundary in the
-  harness, not something `navigate` can route around — don't bother trying
-  `http://localhost:4280` directly first, it will fail the same way. In that
-  case start your own instance on a different port: temporarily edit
-  `.claude/launch.json`'s `serve` entry to pass explicit `--port`/`--api-port`
-  flags (the SWA CLI ignores a `PORT` env var and otherwise prompts
-  interactively when 4280 is taken, which hangs a backgrounded process), run
-  `preview_start`, and **revert `launch.json` back to the default 4280/7071
-  once done** — it's a per-session workaround, not a repo change, and leaving
+  harness — there is no connection to your session to close and nothing about
+  the other server to release; it's simply unreachable from your Browser pane,
+  full stop. Don't bother trying `http://localhost:4280` directly first, it
+  will fail the same way. **Never try to free the port** by finding and
+  killing whatever process is bound to it (or to 7071) — it is someone else's
+  real dev server with real in-progress state, not a stale leftover, and
+  killing it is exactly the kind of destructive action this file's parent
+  guidance says to avoid. Instead spin up your own isolated instance on
+  different ports: temporarily edit `.claude/launch.json`'s `serve` entry to
+  pass explicit `--port`/`--api-port` flags — e.g. `4290`/`7081` as a
+  conventional fallback pair, so future sessions don't each invent a random
+  one (the SWA CLI ignores a `PORT` env var and otherwise prompts
+  interactively when 4280 is taken, which hangs a backgrounded process). Run
+  `preview_start`, and when done: stop your own instance with `preview_stop`
+  (the other session's server was never touched, so there's nothing to leave
+  running or take down there), and **revert `launch.json` back to the default
+  4280/7071** — it's a per-session workaround, not a repo change, and leaving
   it edited would confuse the next session (or the human) expecting the
   documented default port.

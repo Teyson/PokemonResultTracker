@@ -168,6 +168,8 @@ by `DeckTable.svelte` so "gardevoir" and "Gardevoir" don't become two rows.
 
 ### 4. Turn-order (first/second) stats
 
+> **Status: implemented**
+
 **What.** Record whether you went first or second in each match; show win% going
 first vs second, overall and per deck.
 

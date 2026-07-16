@@ -40,7 +40,9 @@ const matchInputSchema = z.object({
   // Optional: what the opponent was playing. opponentType defaults the same
   // way the top-level deck type does when a brand new opponent deck is named.
   opponentDeck: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined), z.string().optional()),
-  opponentType: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : 'Colorless'), z.string())
+  opponentType: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : 'Colorless'), z.string()),
+  // Optional: whether the player went first. Omitted when not recorded.
+  wentFirst: z.boolean().optional()
 });
 
 const nightInputSchema = z.object({
@@ -110,15 +112,19 @@ function deriveTotals(matchList: { result: 'W' | 'T' | 'L' }[]): { w: number; t:
 async function writeMatches(
   db: DbOrTx,
   nightId: number,
-  matchList: { result: 'W' | 'T' | 'L'; opponentDeckId?: number }[]
+  matchList: { result: 'W' | 'T' | 'L'; opponentDeckId?: number; wentFirst?: boolean }[]
 ): Promise<void> {
   await db.delete(matches).where(eq(matches.nightId, nightId));
   if (matchList.length === 0) return;
-  await db
-    .insert(matches)
-    .values(
-      matchList.map((m, i) => ({ nightId, roundNo: i + 1, result: m.result, opponentDeckId: m.opponentDeckId ?? null }))
-    );
+  await db.insert(matches).values(
+    matchList.map((m, i) => ({
+      nightId,
+      roundNo: i + 1,
+      result: m.result,
+      opponentDeckId: m.opponentDeckId ?? null,
+      wentFirst: m.wentFirst ?? null
+    }))
+  );
 }
 
 /**
@@ -128,13 +134,13 @@ async function writeMatches(
  */
 async function resolveMatchOpponents(
   db: Db,
-  matchList: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType: string }[]
-): Promise<{ result: 'W' | 'T' | 'L'; opponentDeckId?: number }[]> {
+  matchList: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType: string; wentFirst?: boolean }[]
+): Promise<{ result: 'W' | 'T' | 'L'; opponentDeckId?: number; wentFirst?: boolean }[]> {
   const cache = new Map<string, number>();
-  const resolved: { result: 'W' | 'T' | 'L'; opponentDeckId?: number }[] = [];
+  const resolved: { result: 'W' | 'T' | 'L'; opponentDeckId?: number; wentFirst?: boolean }[] = [];
   for (const m of matchList) {
     if (!m.opponentDeck) {
-      resolved.push({ result: m.result });
+      resolved.push({ result: m.result, wentFirst: m.wentFirst });
       continue;
     }
     const key = m.opponentDeck.toLowerCase();
@@ -143,7 +149,7 @@ async function resolveMatchOpponents(
       id = await upsertDeck(db, m.opponentDeck, m.opponentType);
       cache.set(key, id);
     }
-    resolved.push({ result: m.result, opponentDeckId: id });
+    resolved.push({ result: m.result, opponentDeckId: id, wentFirst: m.wentFirst });
   }
   return resolved;
 }
@@ -160,7 +166,8 @@ async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, 
       roundNo: matches.roundNo,
       result: matches.result,
       opponentDeck: opponentDecks.name,
-      opponentType: opponentDecks.energyType
+      opponentType: opponentDecks.energyType,
+      wentFirst: matches.wentFirst
     })
     .from(matches)
     .leftJoin(opponentDecks, eq(opponentDecks.id, matches.opponentDeckId))
@@ -173,6 +180,7 @@ async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, 
       m.opponentDeck = row.opponentDeck;
       m.opponentType = row.opponentType ?? 'Colorless';
     }
+    if (row.wentFirst !== null) m.wentFirst = row.wentFirst as boolean;
     list.push(m);
     byNight.set(row.nightId, list);
   }

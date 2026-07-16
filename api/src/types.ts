@@ -3,6 +3,7 @@ export interface MatchResponse {
   result: 'W' | 'T' | 'L';
   opponentDeck?: string;
   opponentType?: string;
+  wentFirst?: boolean;
 }
 
 export interface NightResponse {

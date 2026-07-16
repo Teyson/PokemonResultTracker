@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
+  import { ppg } from '$lib/pokemon';
   import TrendChart from './TrendChart.svelte';
 
   let { nights }: { nights: Night[] } = $props();
@@ -10,6 +11,26 @@
   let g = $derived(totals.w + totals.t + totals.l);
   let P = $derived(totals.w * 3 + totals.t);
   let avgPpg = $derived(g ? (P / g).toFixed(2) : '—');
+
+  /** Splits every match with a recorded turn order into going-first / going-second W/T/L totals. */
+  function turnOrderTotals(list: Night[]): { first: { w: number; t: number; l: number }; second: { w: number; t: number; l: number } } {
+    const first = { w: 0, t: 0, l: 0 };
+    const second = { w: 0, t: 0, l: 0 };
+    for (const n of list) {
+      for (const m of n.matches ?? []) {
+        if (m.wentFirst === undefined) continue;
+        const bucket = m.wentFirst ? first : second;
+        if (m.result === 'W') bucket.w++;
+        else if (m.result === 'T') bucket.t++;
+        else bucket.l++;
+      }
+    }
+    return { first, second };
+  }
+
+  let turnOrder = $derived(turnOrderTotals(nights));
+  let firstGames = $derived(turnOrder.first.w + turnOrder.first.t + turnOrder.first.l);
+  let secondGames = $derived(turnOrder.second.w + turnOrder.second.t + turnOrder.second.l);
 </script>
 
 <div class="board">
@@ -24,6 +45,20 @@
     <div class="readout"><div class="v hero">{P}</div><div class="k">Points</div></div>
     <div class="readout"><div class="v hero">{avgPpg}</div><div class="k">Pts / game</div></div>
   </div>
+  {#if firstGames + secondGames >= 3}
+    <div class="turnorder">
+      <div class="to-cell">
+        <div class="to-lab">Going first</div>
+        <div class="to-rec">{turnOrder.first.w}–{turnOrder.first.t}–{turnOrder.first.l}</div>
+        <div class="to-ppg">{firstGames ? ppg(turnOrder.first).toFixed(2) : '—'} <span>ppg</span></div>
+      </div>
+      <div class="to-cell">
+        <div class="to-lab">Going second</div>
+        <div class="to-rec">{turnOrder.second.w}–{turnOrder.second.t}–{turnOrder.second.l}</div>
+        <div class="to-ppg">{secondGames ? ppg(turnOrder.second).toFixed(2) : '—'} <span>ppg</span></div>
+      </div>
+    </div>
+  {/if}
   {#if nights.length >= 2}
     <TrendChart {nights} avg={avgPpg} />
   {/if}
@@ -123,5 +158,43 @@
     text-transform: uppercase;
     color: var(--muted);
     margin-top: 6px;
+  }
+  .turnorder {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+    position: relative;
+  }
+  .to-cell {
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 8px;
+    text-align: center;
+  }
+  .to-lab {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .to-rec {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+  .to-ppg {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .to-ppg span {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 </style>

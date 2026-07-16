@@ -1,4 +1,4 @@
-import { int, nvarchar, date, datetime2, mssqlTable } from 'drizzle-orm/mssql-core';
+import { int, nvarchar, date, datetime2, bit, mssqlTable } from 'drizzle-orm/mssql-core';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -75,6 +75,8 @@ export const matches = mssqlTable('matches', {
   // Optional: what the opponent was playing, reusing the same decks registry
   // as the player's own deck. Null when not recorded.
   opponentDeckId: int('opponent_deck_id').references(() => decks.id),
+  // Optional: whether the player went first in this match. Null when not recorded.
+  wentFirst: bit('went_first'),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

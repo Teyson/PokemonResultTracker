@@ -1,0 +1,1 @@
+ALTER TABLE [matches] ADD [went_first] bit;

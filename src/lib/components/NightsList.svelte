@@ -92,6 +92,9 @@
               <div class="mrow">
                 <span class="mchip lg {m.result.toLowerCase()}">{m.result}</span>
                 <span class="rn">R{m.roundNo}</span>
+                {#if m.wentFirst !== undefined}
+                  <span class="orderpill">{m.wentFirst ? '1st' : '2nd'}</span>
+                {/if}
                 {#if m.opponentDeck}
                   <span
                     class="vspill"
@@ -275,6 +278,15 @@
     padding: 2px 8px;
     border-radius: 20px;
     font-weight: 600;
+  }
+  .orderpill {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 600;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    flex: 0 0 auto;
   }
   .night .stats {
     display: flex;

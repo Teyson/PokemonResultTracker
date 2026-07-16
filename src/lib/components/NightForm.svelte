@@ -43,6 +43,7 @@
     opponentIsNew: boolean;
     opponentNewName: string;
     opponentType: string;
+    wentFirst?: boolean;
   }
 
   function emptyMatchRow(): MatchRow {
@@ -52,7 +53,8 @@
       opponentName: '',
       opponentIsNew: false,
       opponentNewName: '',
-      opponentType: 'Colorless'
+      opponentType: 'Colorless',
+      wentFirst: undefined
     };
   }
 
@@ -86,7 +88,8 @@
           opponentName: m.opponentDeck ?? '',
           opponentIsNew: false,
           opponentNewName: '',
-          opponentType: m.opponentType ?? 'Colorless'
+          opponentType: m.opponentType ?? 'Colorless',
+          wentFirst: m.wentFirst
         })) ?? [];
     } else {
       const opts = deckRegistry();
@@ -111,6 +114,17 @@
   }
   function setMatchResult(i: number, result: MatchResult) {
     matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, result } : r));
+  }
+  /** Cycles a match's turn order: unrecorded -> went first -> went second -> unrecorded. */
+  function cycleWentFirst(i: number) {
+    matchRows = matchRows.map((r, idx) => {
+      if (idx !== i) return r;
+      const next = r.wentFirst === undefined ? true : r.wentFirst === true ? false : undefined;
+      return { ...r, wentFirst: next };
+    });
+  }
+  function wentFirstLabel(r: MatchRow): string {
+    return r.wentFirst === true ? '1st' : r.wentFirst === false ? '2nd' : '—';
   }
   function removeMatch(i: number) {
     matchRows = matchRows.filter((_, idx) => idx !== i);
@@ -164,6 +178,10 @@
     return name ? { opponentDeck: name, opponentType: r.opponentType } : {};
   }
 
+  function resolveWentFirst(r: MatchRow): { wentFirst: boolean } | Record<string, never> {
+    return r.wentFirst === undefined ? {} : { wentFirst: r.wentFirst };
+  }
+
   async function save() {
     const finalDeck = (newDeck ? newDeckName.trim() : deck) || 'Untitled deck';
     saving = true;
@@ -176,7 +194,7 @@
             w,
             t,
             l,
-            matches: matchRows.map((r) => ({ result: r.result, ...resolveOpponent(r) }))
+            matches: matchRows.map((r) => ({ result: r.result, ...resolveOpponent(r), ...resolveWentFirst(r) }))
           }
         : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l };
       await onSave(input, editing?.id ?? null);
@@ -228,6 +246,17 @@
               >
             {/each}
           </div>
+          <button
+            type="button"
+            class="orderbtn"
+            class:set={row.wentFirst !== undefined}
+            aria-label="Match {i + 1} turn order: {row.wentFirst === true
+              ? 'went first'
+              : row.wentFirst === false
+                ? 'went second'
+                : 'not recorded'}, tap to change"
+            onclick={() => cycleWentFirst(i)}>{wentFirstLabel(row)}</button
+          >
           <button
             type="button"
             class="oppbtn"
@@ -421,6 +450,27 @@
     font-size: 12px;
   }
   .rmbtn:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .orderbtn {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1px dashed var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 10.5px;
+    font-weight: 700;
+    font-family: var(--display);
+  }
+  .orderbtn.set {
+    border-style: solid;
+    color: var(--text);
+  }
+  .orderbtn:focus-visible {
     outline: 2px solid var(--text);
     outline-offset: 2px;
   }

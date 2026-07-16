@@ -3,6 +3,7 @@ export interface Match {
   result: 'W' | 'T' | 'L';
   opponentDeck?: string;
   opponentType?: string;
+  wentFirst?: boolean;
 }
 
 export interface Night {
@@ -25,7 +26,7 @@ export interface NightInput {
   w: number;
   t: number;
   l: number;
-  matches?: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType?: string }[];
+  matches?: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType?: string; wentFirst?: boolean }[];
 }
 
 export interface AllowedUser {

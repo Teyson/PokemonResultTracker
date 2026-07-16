@@ -18,6 +18,8 @@ export interface NightResponse {
   notes: string | null;
   createdBy: string;
   matches?: MatchResponse[];
+  // Only present on the admin scope=deleted view.
+  deletedAt?: string;
 }
 
 export interface DeckSummaryResponse {

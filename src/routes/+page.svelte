@@ -80,7 +80,17 @@
       await api(`/api/nights/${encodeURIComponent(n.id)}`, { method: 'DELETE' });
       if (editing?.id === n.id) editing = null;
       await loadNights();
-      toast('Night deleted');
+      toast(`${n.deck} deleted`, false, { action: { label: 'Undo', onClick: () => restoreNight(n.id) }, duration: 6000 });
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  }
+
+  async function restoreNight(id: string) {
+    try {
+      await api(`/api/nights/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+      await loadNights();
+      toast('Night restored');
     } catch (e) {
       toast((e as Error).message, true);
     }

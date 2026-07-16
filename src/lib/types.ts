@@ -18,6 +18,8 @@ export interface Night {
   notes: string | null;
   createdBy: string;
   matches?: Match[];
+  // Only present on the admin scope=deleted view.
+  deletedAt?: string;
 }
 
 export interface NightInput {

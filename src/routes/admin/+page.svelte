@@ -1,8 +1,9 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, AllowedUser, UsersResponse } from '$lib/types';
+  import type { ClientPrincipal, AllowedUser, UsersResponse, Night } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
+  import { fmtDate } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
@@ -15,9 +16,32 @@
   let loginInput = $state('');
   let adding = $state(false);
 
+  let deletedNights = $state<Night[]>([]);
+  let deletedLoaded = $state(false);
+
   $effect(() => {
     if (isAdmin && !loaded) reload();
+    if (isAdmin && !deletedLoaded) reloadDeleted();
   });
+
+  async function reloadDeleted() {
+    try {
+      deletedNights = (await api<Night[]>('/api/nights?scope=deleted')) ?? [];
+      deletedLoaded = true;
+    } catch (e) {
+      toast(`Could not load deleted nights: ${(e as Error).message}`, true);
+    }
+  }
+
+  async function restoreNight(n: Night) {
+    try {
+      await api(`/api/nights/${encodeURIComponent(n.id)}/restore`, { method: 'POST' });
+      await reloadDeleted();
+      toast(`${n.deck} restored`);
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  }
 
   async function reload() {
     try {
@@ -133,6 +157,26 @@
             <span class="pill member">Member</span>
             <button class="rm" title="Remove" aria-label={`Remove ${u.github_login}`} onclick={() => removeUser(u)}
               >✕</button
+            >
+          </div>
+        {/each}
+      {/if}
+
+      <div class="section-title">Recently deleted nights</div>
+
+      {#if deletedNights.length === 0}
+        <div class="empty">Nothing deleted recently.</div>
+      {:else}
+        {#each deletedNights as n (n.id)}
+          <div class="urow">
+            <div class="who">
+              <div class="login">{n.deck} — {n.w}-{n.t}-{n.l}</div>
+              <div class="meta">
+                {n.createdBy} · {fmtDate(n.date)} · deleted {n.deletedAt ? new Date(n.deletedAt).toLocaleString() : ''}
+              </div>
+            </div>
+            <button class="restore" title="Restore" aria-label={`Restore ${n.deck}`} onclick={() => restoreNight(n)}
+              >Restore</button
             >
           </div>
         {/each}
@@ -320,6 +364,25 @@
     color: #fff;
   }
   .urow .rm:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .urow .restore {
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 12px;
+    background: transparent;
+    color: var(--gold);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .urow .restore:active {
+    background: var(--panel2);
+  }
+  .urow .restore:focus-visible {
     outline: 2px solid var(--text);
     outline-offset: 2px;
   }

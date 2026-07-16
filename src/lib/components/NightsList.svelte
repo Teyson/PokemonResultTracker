@@ -14,10 +14,6 @@
     onDelete: (n: Night) => void;
   } = $props();
 
-  function confirmDelete(n: Night) {
-    if (confirm(`Delete ${n.deck} — ${fmtDate(n.date)}?`)) onDelete(n);
-  }
-
   let expanded = $state<Set<string>>(new Set());
 
   function toggleExpand(id: string) {
@@ -82,7 +78,7 @@
             <div class="ppg"><div class="v">{ppg(n).toFixed(2)}</div><div class="k">{pts(n)} pts</div></div>
             <div class="rowbtns">
               <button title="Edit" aria-label="Edit night" onclick={() => onEdit(n)}>✎</button>
-              <button class="del" title="Delete" aria-label="Delete night" onclick={() => confirmDelete(n)}>✕</button>
+              <button class="del" title="Delete" aria-label="Delete night" onclick={() => onDelete(n)}>✕</button>
             </div>
           </div>
         </div>

@@ -67,7 +67,11 @@ export const nights = mssqlTable('nights', {
     .references(() => users.id),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
-    .default(sql`SYSUTCDATETIME()`)
+    .default(sql`SYSUTCDATETIME()`),
+  // Soft delete: null means active. Deleting sets this instead of removing the
+  // row (and leaves its matches intact) so a delete can be undone; every read
+  // path below filters it out except the admin-only "recently deleted" scope.
+  deletedAt: datetime2('deleted_at', { mode: 'date' })
 });
 
 /**

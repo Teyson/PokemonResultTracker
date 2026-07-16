@@ -1,5 +1,5 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
-import { eq, count, max } from 'drizzle-orm';
+import { and, eq, isNull, count, max } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
@@ -38,7 +38,7 @@ app.http('decks', {
         })
         .from(matches)
         .innerJoin(nights, eq(nights.id, matches.nightId))
-        .where(eq(nights.ownerId, ownerId))
+        .where(and(eq(nights.ownerId, ownerId), isNull(nights.deletedAt)))
         .groupBy(matches.opponentDeckId)
         .as('oppStats');
 

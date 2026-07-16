@@ -99,33 +99,12 @@
     return g ? Math.round(((r.w * 3 + r.t) / (g * 3)) * 100) : null;
   }
 
-  // Win rate over decisive games only — ties are neutral and don't move it.
-  function winPct(r: WTL): number | null {
-    const decisive = r.w + r.l;
-    return decisive ? Math.round((r.w / decisive) * 100) : null;
-  }
-
   function sortedOpponents(d: DeckAgg): MatchupCell[] {
     return [...d.opponents.values()].sort((a, b) => games(b) - games(a));
   }
 
-  type MatchupMode = 'score' | 'win' | 'ppg';
-  let matchupMode = $state<MatchupMode>('score');
-  let matchupLabel = $derived(matchupMode === 'win' ? 'Win%' : matchupMode === 'ppg' ? 'PPG' : 'Score%');
-
-  // Percent used to color-code a matchup cell — always on a 0-100 scale, even
-  // in PPG mode (where the 0-3 ppg range is rescaled), so one gradient covers all three modes.
-  function matchupPct(r: WTL): number | null {
-    if (matchupMode === 'ppg') return (ppg(r) / 3) * 100;
-    return matchupMode === 'win' ? winPct(r) : scorePct(r);
-  }
-
-  function matchupText(r: WTL): string {
-    if (matchupMode === 'ppg') return ppg(r).toFixed(2);
-    const pct = matchupMode === 'win' ? winPct(r) : scorePct(r);
-    return pct === null ? 'all ties' : `${pct}%`;
-  }
-
+  // Percent used to color-code a matchup value — PPG is rescaled from its
+  // 0-3 range onto 0-100 so both columns share the same win/loss gradient.
   function pctColor(pct: number): string {
     const clamped = Math.max(0, Math.min(100, pct));
     return `color-mix(in srgb, var(--win) ${clamped}%, var(--loss))`;
@@ -181,25 +160,17 @@
             {/if}
           </div>
           <div class="agg-section">
-            <div class="agg-lab-row">
-              <div class="agg-lab">Matchups</div>
-              <div class="mode-toggle">
-                <button type="button" class:active={matchupMode === 'score'} onclick={() => (matchupMode = 'score')}
-                  >Score%</button
-                >
-                <button type="button" class:active={matchupMode === 'win'} onclick={() => (matchupMode = 'win')}>Win%</button>
-                <button type="button" class:active={matchupMode === 'ppg'} onclick={() => (matchupMode = 'ppg')}>PPG</button>
-              </div>
-            </div>
+            <div class="agg-lab">Matchups</div>
             {#if opponents.length > 0}
               <div class="mu-table">
                 <div class="mu-row mu-head">
-                  <span>Opponent</span><span>Record</span><span>{matchupLabel}</span>
+                  <span>Opponent</span><span>Record</span><span>Score%</span><span>PPG</span>
                 </div>
                 {#each opponents as opp (opp.name)}
                   {@const g = games(opp)}
                   {@const lowData = g < 3}
-                  {@const pct = matchupPct(opp)}
+                  {@const pct = scorePct(opp)}
+                  {@const ppgVal = ppg(opp)}
                   <div class="mu-row">
                     <span class="mu-name">{opp.name}</span>
                     <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
@@ -207,7 +178,10 @@
                       class="mu-val"
                       class:low={lowData}
                       style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
-                      >{lowData ? 'low data' : matchupText(opp)}</span
+                      >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
+                    >
+                    <span class="mu-val" class:low={lowData} style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
+                      >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
                     >
                   </div>
                 {/each}
@@ -336,36 +310,6 @@
     color: var(--muted);
     margin-bottom: 6px;
   }
-  .agg-lab-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 6px;
-  }
-  .agg-lab-row .agg-lab {
-    margin-bottom: 0;
-  }
-  .mode-toggle {
-    display: flex;
-    gap: 4px;
-  }
-  .mode-toggle button {
-    font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 3px 9px;
-    cursor: pointer;
-  }
-  .mode-toggle button.active {
-    color: var(--text);
-    border-color: var(--muted2);
-    background: var(--panel2);
-  }
   .to-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -419,7 +363,7 @@
   }
   .mu-row {
     display: grid;
-    grid-template-columns: 1fr 74px 64px;
+    grid-template-columns: 1fr 68px 56px 56px;
     gap: 8px;
     align-items: center;
     padding: 7px 10px;

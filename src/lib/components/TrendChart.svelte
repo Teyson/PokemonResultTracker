@@ -7,7 +7,7 @@
   const BW = 34;
   const GAP = 10;
   const H = 88;
-  const TOP = 6;
+  const TOP = 16;
 
   // Nights arrive newest-first from the API; the chart reads oldest-to-newest.
   let chrono = $derived([...nights].reverse());

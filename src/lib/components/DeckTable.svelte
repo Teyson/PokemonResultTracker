@@ -100,7 +100,7 @@
   }
 
   type MatchupSortKey = 'name' | 'record' | 'score' | 'ppg';
-  let matchupSort = $state<{ key: MatchupSortKey; dir: 1 | -1 }>({ key: 'record', dir: -1 });
+  let matchupSort = $state<{ key: MatchupSortKey; dir: 1 | -1 }>({ key: 'name', dir: 1 });
 
   function toggleMatchupSort(key: MatchupSortKey) {
     matchupSort =

@@ -6,6 +6,7 @@
   import { toast } from '$lib/toast.svelte';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
+  import Records from '$lib/components/Records.svelte';
   import NightForm from '$lib/components/NightForm.svelte';
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
@@ -142,6 +143,7 @@
       </div>
 
       <Scoreboard {nights} />
+      <Records {nights} />
       <NightForm
         {nights}
         {decks}

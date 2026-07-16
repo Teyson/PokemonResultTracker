@@ -237,6 +237,16 @@ that this moves server-side only if it ever becomes slow.
 
 ### 7. Deck detail page
 
+> **Status: implemented differently than scoped, in PR #37.** Rather than a
+> separate `/deck` route, the trend chart and full night history were added as
+> two more collapsible subsections inside `DeckTable.svelte`'s existing
+> per-deck foldout (which already covered turn order and matchup breakdowns).
+> This matches how the app had already been evolving deck-level detail — no
+> new route, no prerender rewrite, no duplicated Scoreboard/nights-fetch
+> plumbing. The subsections default collapsed so the foldout doesn't bloat.
+> Pick the original query-string-route framing back up only if a shareable
+> deep link to a single deck is later wanted for its own sake.
+
 **What.** Click a deck anywhere (DeckTable row, night card chip) → a dedicated
 view for that deck: record, PPG, trend chart filtered to that deck, its nights,
 and (if ideas 2–3 exist) its matchup breakdown.

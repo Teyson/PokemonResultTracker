@@ -9,8 +9,8 @@
   const H = 88;
   const TOP = 16;
 
-  // Nights arrive newest-first from the API; the chart reads oldest-to-newest.
-  let chrono = $derived([...nights].reverse());
+  // Nights arrive newest-first from the API; the chart reads newest-to-oldest, left to right.
+  let chrono = $derived(nights);
   let width = $derived(chrono.length * (BW + GAP) - GAP + 8);
 
   function barHeight(n: Night): number {

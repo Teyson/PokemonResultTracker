@@ -20,6 +20,24 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--panel2) var(--ink2);
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--ink2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--panel2);
+  border-radius: 8px;
+  border: 2px solid var(--ink2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line);
 }
 
 html,

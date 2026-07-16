@@ -94,3 +94,12 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   with no username — it looks like a broken login flow but isn't. When testing
   role-dependent views locally, prefer the `.env.local` dev-login bar (see
   README, "Testing the member/admin views") over automating that form.
+- The user almost always has a `npm run serve` (SWA CLI, `http://localhost:4280`)
+  already running locally with real seeded data — check there before starting a
+  new one. If it's already up, just use it (e.g. navigate the browser preview to
+  `http://localhost:4280` directly rather than via `preview_start`, which will
+  fail with a port conflict). Since it serves the prebuilt `build/` output rather
+  than live source, run `npm run build` first to pick up pending changes before
+  verifying against it. Don't shut it down when done — leave it running for next
+  time. Only start a fresh one (`preview_start` with `serve`) if nothing answers
+  on port 4280.

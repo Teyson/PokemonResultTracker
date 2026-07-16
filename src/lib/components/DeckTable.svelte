@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { colorOf, ppg } from '$lib/pokemon';
+  import { ppg } from '$lib/pokemon';
   import { slide } from 'svelte/transition';
+  import TypeIcon from './TypeIcon.svelte';
 
   let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
@@ -26,6 +27,7 @@
     first: WTL;
     second: WTL;
     opponents: Map<string, MatchupCell>;
+    opponentTypes: Map<string, MatchupCell>;
   }
 
   function emptyWtl(): WTL {
@@ -50,7 +52,8 @@
           l: 0,
           first: emptyWtl(),
           second: emptyWtl(),
-          opponents: new Map()
+          opponents: new Map(),
+          opponentTypes: new Map()
         } satisfies DeckAgg);
       agg.w += n.w;
       agg.t += n.t;
@@ -69,6 +72,14 @@
           else if (m.result === 'T') cell.t++;
           else cell.l++;
           agg.opponents.set(ck, cell);
+        }
+        if (m.opponentType) {
+          const tk = m.opponentType;
+          const cell = agg.opponentTypes.get(tk) ?? { name: m.opponentType, w: 0, t: 0, l: 0 };
+          if (m.result === 'W') cell.w++;
+          else if (m.result === 'T') cell.t++;
+          else cell.l++;
+          agg.opponentTypes.set(tk, cell);
         }
       }
       map.set(k, agg);
@@ -126,6 +137,30 @@
     });
   }
 
+  let typeSort = $state<{ key: MatchupSortKey; dir: 1 | -1 }>({ key: 'name', dir: 1 });
+
+  function toggleTypeSort(key: MatchupSortKey) {
+    typeSort =
+      typeSort.key === key ? { key, dir: typeSort.dir === 1 ? -1 : 1 } : { key, dir: key === 'name' ? 1 : -1 };
+  }
+
+  function typeSortArrow(key: MatchupSortKey): string {
+    if (typeSort.key !== key) return '';
+    return typeSort.dir === 1 ? ' ▲' : ' ▼';
+  }
+
+  function sortedOpponentTypes(d: DeckAgg): MatchupCell[] {
+    const { key, dir } = typeSort;
+    return [...d.opponentTypes.values()].sort((a, b) => {
+      let cmp = 0;
+      if (key === 'name') cmp = a.name.localeCompare(b.name);
+      else if (key === 'record') cmp = games(a) - games(b);
+      else if (key === 'score') cmp = (scorePct(a) ?? -1) - (scorePct(b) ?? -1);
+      else cmp = ppg(a) - ppg(b);
+      return cmp * dir;
+    });
+  }
+
   // Percent used to color-code a matchup value — PPG is rescaled from its
   // 0-3 range onto 0-100 so both columns share the same win/loss gradient.
   function pctColor(pct: number): string {
@@ -146,7 +181,7 @@
       {@const hasTurnOrder = games(d.first) + games(d.second) >= 3}
       <div class="drow">
         <div class="dname">
-          <span class="dot" style="background:{colorOf(d.type)}"></span><span class="dname-text">{d.deck}</span>
+          <TypeIcon type={d.type} size={16} /><span class="dname-text">{d.deck}</span>
           {#if showOwner}<span class="owner">· {d.owner}</span>{/if}
         </div>
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
@@ -162,6 +197,7 @@
       </div>
       {#if expanded.has(d.key)}
         {@const opponents = sortedOpponents(d)}
+        {@const opponentTypes = sortedOpponentTypes(d)}
         <div class="aggrow" transition:slide={{ duration: 220 }}>
           <div class="agg-section">
             <div class="agg-lab">Turn order</div>
@@ -214,6 +250,40 @@
               </div>
             {:else}
               <div class="to-empty">No opponent decks logged yet.</div>
+            {/if}
+          </div>
+          <div class="agg-section">
+            <div class="agg-lab">Opponent types</div>
+            {#if opponentTypes.length > 0}
+              <div class="mu-table">
+                <div class="mu-row mu-head">
+                  <button type="button" onclick={() => toggleTypeSort('name')}>Type{typeSortArrow('name')}</button>
+                  <button type="button" onclick={() => toggleTypeSort('record')}>Record{typeSortArrow('record')}</button>
+                  <button type="button" onclick={() => toggleTypeSort('score')}>Score%{typeSortArrow('score')}</button>
+                  <button type="button" onclick={() => toggleTypeSort('ppg')}>PPG{typeSortArrow('ppg')}</button>
+                </div>
+                {#each opponentTypes as opp (opp.name)}
+                  {@const g = games(opp)}
+                  {@const lowData = g < 3}
+                  {@const pct = scorePct(opp)}
+                  {@const ppgVal = ppg(opp)}
+                  <div class="mu-row">
+                    <span class="mu-name"><TypeIcon type={opp.name} size={16} />{opp.name}</span>
+                    <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
+                    <span
+                      class="mu-val"
+                      class:low={lowData}
+                      style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
+                      >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
+                    >
+                    <span class="mu-val" class:low={lowData} style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
+                      >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
+                    >
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="to-empty">No opponent types logged yet.</div>
             {/if}
           </div>
         </div>
@@ -276,12 +346,6 @@
     font-weight: 600;
     font-size: 14px;
     min-width: 0;
-  }
-  .drow .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex: 0 0 auto;
   }
   .drow .dname-text {
     overflow: hidden;
@@ -420,6 +484,9 @@
     text-align: right;
   }
   .mu-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
     font-size: 12.5px;
     font-weight: 600;

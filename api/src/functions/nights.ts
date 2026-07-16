@@ -4,7 +4,7 @@ import { eq, inArray, asc, desc } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/mssql-core';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
-import { upsertDeck } from '../db/decks';
+import { upsertOwnedDeck, upsertOpponentDeck } from '../db/decks';
 import { ensureUser } from '../db/userDirectory';
 import { getUser, resolveRole } from '../auth';
 import type { MatchResponse, NightResponse } from '../types';
@@ -26,8 +26,11 @@ import type { MatchResponse, NightResponse } from '../types';
  * Members only see and manage their own nights; admins can pass ?scope=all to
  * view everyone's, and can edit/delete any night.
  *
- * Decks are normalized into their own table; the client just sends a deck name
- * plus type and we upsert the deck transparently, same as before.
+ * Decks are normalized into their own table and owned per-player: the client
+ * just sends a deck name plus type, and the player's own deck is upserted
+ * scoped to their ownerId (so two players can each have a same-named deck).
+ * Opponent decks upsert across every deck regardless of owner, so they behave
+ * like one shared/global list.
  */
 
 const nonNegativeInt = z.preprocess((v) => {
@@ -37,6 +40,10 @@ const nonNegativeInt = z.preprocess((v) => {
 
 const matchInputSchema = z.object({
   result: z.enum(['W', 'T', 'L']),
+  // Set when the opponent's deck was picked from the /api/decks list rather
+  // than typed fresh — takes priority over opponentDeck below, since a name
+  // alone is ambiguous once two owners can share a deck name.
+  opponentDeckId: z.coerce.number().int().positive().optional(),
   // Optional: what the opponent was playing. opponentType defaults the same
   // way the top-level deck type does when a brand new opponent deck is named.
   opponentDeck: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined), z.string().optional()),
@@ -128,17 +135,23 @@ async function writeMatches(
 }
 
 /**
- * Upserts the opponent deck named on each match (if any) and resolves it to an
- * id, ready for writeMatches. A small in-call cache avoids re-upserting the
- * same opponent deck once per match within a single night.
+ * Resolves each match's opponent to a deck id, ready for writeMatches. When
+ * the client already picked a specific deck (opponentDeckId, from the
+ * /api/decks list) that id is used as-is; otherwise the typed-in name is
+ * upserted as before. A small in-call cache avoids re-upserting the same
+ * freshly-typed opponent deck once per match within a single night.
  */
 async function resolveMatchOpponents(
   db: Db,
-  matchList: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType: string; wentFirst?: boolean }[]
+  matchList: { result: 'W' | 'T' | 'L'; opponentDeckId?: number; opponentDeck?: string; opponentType: string; wentFirst?: boolean }[]
 ): Promise<{ result: 'W' | 'T' | 'L'; opponentDeckId?: number; wentFirst?: boolean }[]> {
   const cache = new Map<string, number>();
   const resolved: { result: 'W' | 'T' | 'L'; opponentDeckId?: number; wentFirst?: boolean }[] = [];
   for (const m of matchList) {
+    if (m.opponentDeckId) {
+      resolved.push({ result: m.result, opponentDeckId: m.opponentDeckId, wentFirst: m.wentFirst });
+      continue;
+    }
     if (!m.opponentDeck) {
       resolved.push({ result: m.result, wentFirst: m.wentFirst });
       continue;
@@ -146,7 +159,7 @@ async function resolveMatchOpponents(
     const key = m.opponentDeck.toLowerCase();
     let id = cache.get(key);
     if (id === undefined) {
-      id = await upsertDeck(db, m.opponentDeck, m.opponentType);
+      id = await upsertOpponentDeck(db, m.opponentDeck, m.opponentType);
       cache.set(key, id);
     }
     resolved.push({ result: m.result, opponentDeckId: id, wentFirst: m.wentFirst });
@@ -165,6 +178,7 @@ async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, 
       nightId: matches.nightId,
       roundNo: matches.roundNo,
       result: matches.result,
+      opponentDeckId: matches.opponentDeckId,
       opponentDeck: opponentDecks.name,
       opponentType: opponentDecks.energyType,
       wentFirst: matches.wentFirst
@@ -177,6 +191,7 @@ async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, 
     const list = byNight.get(row.nightId) ?? [];
     const m: MatchResponse = { roundNo: row.roundNo, result: row.result as 'W' | 'T' | 'L' };
     if (row.opponentDeck) {
+      m.opponentDeckId = String(row.opponentDeckId);
       m.opponentDeck = row.opponentDeck;
       m.opponentType = row.opponentType ?? 'Colorless';
     }
@@ -274,7 +289,10 @@ app.http('nights', {
         return { status: 400, jsonBody: { error: parsed.error.issues[0]?.message ?? 'Invalid request body.' } };
       }
       const input = parsed.data;
-      const deckId = await upsertDeck(db, input.deck, input.type);
+      // Resolved up front (not just in the POST branch) since the player's own
+      // deck is now looked up/created scoped to their ownerId on PUT too.
+      const ownerId = await ensureUser(db, user.userId, user.userDetails);
+      const deckId = await upsertOwnedDeck(db, ownerId, input.deck, input.type);
       // Detailed mode (matches present) derives w/t/l from the match log;
       // quick mode uses the raw fields and clears any prior match log so the
       // two can never drift apart.
@@ -284,7 +302,6 @@ app.http('nights', {
       const resolvedMatches = input.matches ? await resolveMatchOpponents(db, input.matches) : undefined;
 
       if (request.method === 'POST') {
-        const ownerId = await ensureUser(db, user.userId, user.userDetails);
         const newId = await db.transaction(async (tx) => {
           const inserted = await tx
             .insert(nights)

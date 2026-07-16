@@ -2,7 +2,7 @@
   import type { Night } from '$lib/types';
   import { colorOf, ppg } from '$lib/pokemon';
 
-  let { nights }: { nights: Night[] } = $props();
+  let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
   interface WTL {
     w: number;
@@ -11,8 +11,10 @@
   }
 
   interface DeckAgg {
+    key: string;
     deck: string;
     type: string;
+    owner: string;
     w: number;
     t: number;
     l: number;
@@ -24,11 +26,15 @@
     return { w: 0, t: 0, l: 0 };
   }
 
+  // Keyed by owner + name, not name alone — different owners can have a
+  // same-named deck, and those should stay separate rows rather than merge.
   let decks = $derived.by(() => {
     const map = new Map<string, DeckAgg>();
     for (const n of nights) {
-      const k = n.deck.trim().toLowerCase();
-      const agg = map.get(k) ?? { deck: n.deck, type: n.type, w: 0, t: 0, l: 0, first: emptyWtl(), second: emptyWtl() };
+      const k = `${n.createdBy}::${n.deck.trim().toLowerCase()}`;
+      const agg =
+        map.get(k) ??
+        ({ key: k, deck: n.deck, type: n.type, owner: n.createdBy, w: 0, t: 0, l: 0, first: emptyWtl(), second: emptyWtl() } satisfies DeckAgg);
       agg.w += n.w;
       agg.t += n.t;
       agg.l += n.l;
@@ -68,25 +74,27 @@
     <div class="drow head">
       <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span></span>
     </div>
-    {#each decks as d (d.deck)}
+    {#each decks as d (d.key)}
       {@const g = d.w + d.t + d.l}
       {@const p = d.w * 3 + d.t}
-      {@const key = d.deck.trim().toLowerCase()}
       {@const hasTurnOrder = games(d.first) + games(d.second) >= 3}
       <div class="drow">
-        <div class="dname"><span class="dot" style="background:{colorOf(d.type)}"></span><span>{d.deck}</span></div>
+        <div class="dname">
+          <span class="dot" style="background:{colorOf(d.type)}"></span><span class="dname-text">{d.deck}</span>
+          {#if showOwner}<span class="owner">· {d.owner}</span>{/if}
+        </div>
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
         <div class="mono">{p}</div>
         <div class="mono gold">{g ? (p / g).toFixed(2) : '—'}</div>
         <button
           type="button"
           class="chev"
-          aria-expanded={expanded.has(key)}
+          aria-expanded={expanded.has(d.key)}
           aria-label="Toggle turn-order breakdown for {d.deck}"
-          onclick={() => toggleExpand(key)}>{expanded.has(key) ? '▴' : '▾'}</button
+          onclick={() => toggleExpand(d.key)}>{expanded.has(d.key) ? '▴' : '▾'}</button
         >
       </div>
-      {#if expanded.has(key)}
+      {#if expanded.has(d.key)}
         <div class="turnrow">
           {#if hasTurnOrder}
             <div class="to-cell">
@@ -169,10 +177,15 @@
     border-radius: 50%;
     flex: 0 0 auto;
   }
-  .drow .dname span:last-child {
+  .drow .dname-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .drow .dname .owner {
+    flex: 0 0 auto;
+    color: var(--muted2);
+    font-weight: 400;
   }
   .drow .mono {
     font-family: var(--display);

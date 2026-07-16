@@ -1,4 +1,4 @@
-import { int, nvarchar, date, datetime2, bit, mssqlTable } from 'drizzle-orm/mssql-core';
+import { int, nvarchar, date, datetime2, bit, mssqlTable, unique } from 'drizzle-orm/mssql-core';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -7,14 +7,28 @@ import { sql } from 'drizzle-orm';
  * fallback reference.
  */
 
-export const decks = mssqlTable('decks', {
-  id: int().primaryKey().identity(),
-  name: nvarchar({ length: 100 }).notNull().unique(),
-  energyType: nvarchar('energy_type', { length: 50 }),
-  createdAt: datetime2('created_at', { mode: 'date' })
-    .notNull()
-    .default(sql`SYSUTCDATETIME()`)
-});
+/**
+ * Decks are owned by whoever created them (owner_id, nullable). A deck with
+ * no owner is a reference-only entry — never logged as anyone's own deck,
+ * only usable as an opponent's — for archetypes played by people who don't
+ * use this app. Names are unique per owner (and among unowned decks) rather
+ * than globally, so two players can each have their own "Charizard ex"
+ * without colliding; opponent-deck matching still searches across every
+ * deck regardless of owner, so it behaves like one shared/global list.
+ */
+export const decks = mssqlTable(
+  'decks',
+  {
+    id: int().primaryKey().identity(),
+    name: nvarchar({ length: 100 }).notNull(),
+    ownerId: int('owner_id').references(() => users.id),
+    energyType: nvarchar('energy_type', { length: 50 }),
+    createdAt: datetime2('created_at', { mode: 'date' })
+      .notNull()
+      .default(sql`SYSUTCDATETIME()`)
+  },
+  (table) => [unique('decks_owner_id_name_unique').on(table.ownerId, table.name)]
+);
 
 /**
  * Identity directory for everyone who has actually signed in. Keyed on the

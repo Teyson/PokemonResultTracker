@@ -3,19 +3,27 @@
   import TypeIcon from './TypeIcon.svelte';
 
   export interface DeckOption {
+    id?: string;
     name: string;
     type: string;
+    owner?: string | null;
+    timesPlayedAgainst?: number;
+    lastPlayedAgainst?: string | null;
   }
+
+  type SortMode = 'name' | 'owner' | 'recent' | 'most';
 
   let {
     decks,
     label,
     idPrefix,
     selectedName,
+    selectedId,
     isNew,
     newName,
     type,
     clearable = false,
+    searchable = false,
     onSelect,
     onSelectNew,
     onClear,
@@ -26,32 +34,84 @@
     label: string;
     idPrefix: string;
     selectedName: string;
+    selectedId?: string;
     isNew: boolean;
     newName: string;
     type: string;
     clearable?: boolean;
+    searchable?: boolean;
     onSelect: (d: DeckOption) => void;
     onSelectNew: () => void;
     onClear?: () => void;
     onNewNameInput: (v: string) => void;
     onTypeSelect: (t: string) => void;
   } = $props();
+
+  let search = $state('');
+  let sortMode = $state<SortMode>('most');
+
+  let visibleDecks = $derived.by(() => {
+    if (!searchable) return decks;
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? decks.filter((d) => d.name.toLowerCase().includes(q) || (d.owner ?? '').toLowerCase().includes(q))
+      : decks;
+    const sorted = [...filtered];
+    switch (sortMode) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'owner':
+        sorted.sort((a, b) => (a.owner ?? '').localeCompare(b.owner ?? '') || a.name.localeCompare(b.name));
+        break;
+      case 'recent':
+        sorted.sort(
+          (a, b) =>
+            (b.lastPlayedAgainst ?? '').localeCompare(a.lastPlayedAgainst ?? '') || a.name.localeCompare(b.name)
+        );
+        break;
+      case 'most':
+        sorted.sort((a, b) => (b.timesPlayedAgainst ?? 0) - (a.timesPlayedAgainst ?? 0) || a.name.localeCompare(b.name));
+        break;
+    }
+    return sorted;
+  });
 </script>
 
 <div class="field">
   <span class="field-label" id="{idPrefix}Label">{label}</span>
-  <div class="deckchips" role="group" aria-labelledby="{idPrefix}Label">
+  {#if searchable}
+    <div class="pickertools">
+      <input
+        type="text"
+        class="search"
+        placeholder="Search by deck or owner…"
+        autocomplete="off"
+        value={search}
+        oninput={(e) => (search = (e.currentTarget as HTMLInputElement).value)}
+      />
+      <select class="sort" value={sortMode} onchange={(e) => (sortMode = e.currentTarget.value as SortMode)}>
+        <option value="most">Most played against</option>
+        <option value="recent">Recently played against</option>
+        <option value="name">Name (A–Z)</option>
+        <option value="owner">Owner (A–Z)</option>
+      </select>
+    </div>
+  {/if}
+  <div class="deckchips" class:scrollable={searchable} role="group" aria-labelledby="{idPrefix}Label">
     {#if clearable}
       <button type="button" class="dchip clear" aria-pressed={!isNew && !selectedName} onclick={onClear}>None</button>
     {/if}
-    {#each decks as d (d.name)}
+    {#each visibleDecks as d (d.id ?? d.name)}
       <button
         type="button"
         class="dchip"
-        aria-pressed={!isNew && selectedName === d.name}
+        aria-pressed={!isNew && (d.id ? d.id === selectedId : selectedName === d.name)}
         onclick={() => onSelect(d)}
       >
         <TypeIcon type={d.type} size={16} />{d.name}
+        {#if d.owner}<span class="chipowner">· {d.owner}</span>{/if}
+        {#if d.timesPlayedAgainst}<span class="chipcount">×{d.timesPlayedAgainst}</span>{/if}
       </button>
     {/each}
     <button type="button" class="dchip new" aria-pressed={isNew} onclick={onSelectNew}>+ New deck</button>
@@ -96,10 +156,35 @@
     color: var(--muted);
     margin-bottom: 6px;
   }
+  .pickertools {
+    display: flex;
+    gap: 7px;
+    margin-bottom: 9px;
+  }
+  .pickertools .search {
+    flex: 1;
+    min-width: 0;
+  }
+  .pickertools .sort {
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 0 8px;
+    cursor: pointer;
+  }
   .deckchips {
     display: flex;
     flex-wrap: wrap;
     gap: 7px;
+  }
+  .deckchips.scrollable {
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 2px;
   }
   .dchip {
     display: flex;
@@ -126,6 +211,14 @@
     border-color: var(--red);
     background: rgba(239, 47, 66, 0.13);
     box-shadow: 0 0 0 2px rgba(239, 47, 66, 0.2);
+  }
+  .chipowner {
+    color: var(--muted2);
+    font-weight: 400;
+  }
+  .chipcount {
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .dchip.new {
     border-style: dashed;

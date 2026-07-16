@@ -2,7 +2,7 @@
   import type { Night } from '$lib/types';
   import { colorOf } from '$lib/pokemon';
 
-  let { nights }: { nights: Night[] } = $props();
+  let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
   interface Cell {
     name: string;
@@ -11,8 +11,10 @@
     l: number;
   }
   interface Row {
+    key: string;
     name: string;
     type: string;
+    owner: string;
     total: number;
     opponents: Map<string, Cell>;
   }
@@ -24,6 +26,9 @@
 
   let mode = $state<'win' | 'score'>('score');
 
+  // Rows ("my deck") are keyed by owner + name, since different owners can
+  // have a same-named deck and those shouldn't merge into one row. Columns
+  // (opponent decks) stay name-keyed — opponents are unowned/global.
   let matrix = $derived.by(() => {
     const rowMap = new Map<string, Row>();
     const colTotals = new Map<string, Col>();
@@ -31,10 +36,10 @@
     for (const n of nights) {
       for (const m of n.matches ?? []) {
         if (!m.opponentDeck) continue;
-        const rk = n.deck.trim().toLowerCase();
+        const rk = `${n.createdBy}::${n.deck.trim().toLowerCase()}`;
         const ck = m.opponentDeck.trim().toLowerCase();
 
-        const row = rowMap.get(rk) ?? { name: n.deck, type: n.type, total: 0, opponents: new Map() };
+        const row = rowMap.get(rk) ?? { key: rk, name: n.deck, type: n.type, owner: n.createdBy, total: 0, opponents: new Map() };
         const cell = row.opponents.get(ck) ?? { name: m.opponentDeck, w: 0, t: 0, l: 0 };
         if (m.result === 'W') cell.w++;
         else if (m.result === 'T') cell.t++;
@@ -89,9 +94,10 @@
       {#each matrix.cols as col (col.key)}
         <div class="cell colhead"><span>{col.name}</span></div>
       {/each}
-      {#each matrix.rows as row (row.name)}
+      {#each matrix.rows as row (row.key)}
         <div class="cell rowhead">
-          <span class="dot" style="background:{colorOf(row.type)}"></span><span>{row.name}</span>
+          <span class="dot" style="background:{colorOf(row.type)}"></span><span class="rowhead-text">{row.name}</span>
+          {#if showOwner}<span class="owner">· {row.owner}</span>{/if}
         </div>
         {#each matrix.cols as col (col.key)}
           {@const cell = row.opponents.get(col.key)}
@@ -210,10 +216,16 @@
     text-align: left;
     background: rgba(0, 0, 0, 0.12);
   }
-  .rowhead span:last-child {
+  .rowhead-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .rowhead .owner {
+    flex: 0 0 auto;
+    font-weight: 400;
+    color: var(--muted2);
+    font-size: 11px;
   }
   .rowhead .dot {
     width: 8px;

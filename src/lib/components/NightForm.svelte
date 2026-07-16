@@ -1,32 +1,50 @@
 <script lang="ts">
-  import type { Night, NightInput } from '$lib/types';
+  import type { Night, NightInput, DeckSummary } from '$lib/types';
   import { recentTuesday } from '$lib/pokemon';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
 
   let {
     nights,
+    decks: allDecks,
     editing,
+    myLogin,
     onSave,
     onCancel
   }: {
     nights: Night[];
+    decks: DeckSummary[];
     editing: Night | null;
+    myLogin: string;
     onSave: (input: NightInput, editId: string | null) => Promise<void>;
     onCancel: () => void;
   } = $props();
 
-  // Includes both decks the player has logged and decks seen only as an
-  // opponent, so the opponent picker on a match row offers the same registry.
+  // The full global decklist (any owner, or unowned), for the opponent
+  // picker — lets it search/sort across every deck rather than just names
+  // the current user has personally logged against before.
+  let opponentDecks = $derived<DeckOption[]>(
+    allDecks.map((d) => ({
+      id: d.id,
+      name: d.name,
+      type: d.type,
+      owner: d.ownerLogin,
+      timesPlayedAgainst: d.timesPlayedAgainst,
+      lastPlayedAgainst: d.lastPlayedAgainst
+    }))
+  );
+
+  // Own-deck options are only decks the current user has actually created —
+  // restricted to nights they logged (in admin "Everyone" scope, `nights`
+  // includes other players' owned decks too, and picking one of those
+  // wouldn't claim their deck, just create/match a same-named deck under the
+  // current user). Decks only ever seen as an opponent must never show up
+  // here — facing a deck doesn't make it yours.
   function deckRegistry(): DeckOption[] {
     const map = new Map<string, DeckOption>();
     for (const n of nights) {
+      if (n.createdBy !== myLogin) continue;
       const k = n.deck.trim().toLowerCase();
       if (!map.has(k)) map.set(k, { name: n.deck, type: n.type });
-      for (const m of n.matches ?? []) {
-        if (!m.opponentDeck) continue;
-        const ok = m.opponentDeck.trim().toLowerCase();
-        if (!map.has(ok)) map.set(ok, { name: m.opponentDeck, type: m.opponentType ?? 'Colorless' });
-      }
     }
     return [...map.values()];
   }
@@ -40,6 +58,7 @@
     result: MatchResult;
     opponentOpen: boolean;
     opponentName: string;
+    opponentDeckId?: string;
     opponentIsNew: boolean;
     opponentNewName: string;
     opponentType: string;
@@ -51,6 +70,7 @@
       result: 'W',
       opponentOpen: false,
       opponentName: '',
+      opponentDeckId: undefined,
       opponentIsNew: false,
       opponentNewName: '',
       opponentType: 'Colorless',
@@ -86,6 +106,7 @@
           result: m.result,
           opponentOpen: !!m.opponentDeck,
           opponentName: m.opponentDeck ?? '',
+          opponentDeckId: m.opponentDeckId,
           opponentIsNew: false,
           opponentNewName: '',
           opponentType: m.opponentType ?? 'Colorless',
@@ -134,16 +155,18 @@
   }
   function selectOpponent(i: number, d: DeckOption) {
     matchRows = matchRows.map((r, idx) =>
-      idx === i ? { ...r, opponentIsNew: false, opponentName: d.name, opponentType: d.type } : r
+      idx === i ? { ...r, opponentIsNew: false, opponentName: d.name, opponentDeckId: d.id, opponentType: d.type } : r
     );
   }
   function selectOpponentNew(i: number) {
-    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, opponentIsNew: true, opponentName: '' } : r));
+    matchRows = matchRows.map((r, idx) =>
+      idx === i ? { ...r, opponentIsNew: true, opponentName: '', opponentDeckId: undefined } : r
+    );
   }
   function clearOpponent(i: number) {
     matchRows = matchRows.map((r, idx) =>
       idx === i
-        ? { ...r, opponentOpen: false, opponentIsNew: false, opponentName: '', opponentNewName: '' }
+        ? { ...r, opponentOpen: false, opponentIsNew: false, opponentName: '', opponentDeckId: undefined, opponentNewName: '' }
         : r
     );
   }
@@ -173,7 +196,10 @@
     else l = Math.max(0, l + delta);
   }
 
-  function resolveOpponent(r: MatchRow): { opponentDeck: string; opponentType: string } | Record<string, never> {
+  function resolveOpponent(
+    r: MatchRow
+  ): { opponentDeckId: string } | { opponentDeck: string; opponentType: string } | Record<string, never> {
+    if (!r.opponentIsNew && r.opponentDeckId) return { opponentDeckId: r.opponentDeckId };
     const name = (r.opponentIsNew ? r.opponentNewName : r.opponentName).trim();
     return name ? { opponentDeck: name, opponentType: r.opponentType } : {};
   }
@@ -270,10 +296,12 @@
         {#if row.opponentOpen}
           <div class="opponent">
             <DeckPicker
-              {decks}
+              decks={opponentDecks}
+              searchable
               label="Opponent's deck (optional)"
               idPrefix="match{i}opp"
               selectedName={row.opponentName}
+              selectedId={row.opponentDeckId}
               isNew={row.opponentIsNew}
               newName={row.opponentNewName}
               type={row.opponentType}

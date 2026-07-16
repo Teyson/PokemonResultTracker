@@ -1,6 +1,7 @@
 export interface MatchResponse {
   roundNo: number;
   result: 'W' | 'T' | 'L';
+  opponentDeckId?: string;
   opponentDeck?: string;
   opponentType?: string;
   wentFirst?: boolean;
@@ -17,6 +18,15 @@ export interface NightResponse {
   notes: string | null;
   createdBy: string;
   matches?: MatchResponse[];
+}
+
+export interface DeckSummaryResponse {
+  id: string;
+  name: string;
+  type: string;
+  ownerLogin: string | null;
+  timesPlayedAgainst: number;
+  lastPlayedAgainst: string | null;
 }
 
 export interface AllowedUserResponse {

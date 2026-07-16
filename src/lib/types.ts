@@ -1,6 +1,7 @@
 export interface Match {
   roundNo: number;
   result: 'W' | 'T' | 'L';
+  opponentDeckId?: string;
   opponentDeck?: string;
   opponentType?: string;
   wentFirst?: boolean;
@@ -26,7 +27,22 @@ export interface NightInput {
   w: number;
   t: number;
   l: number;
-  matches?: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType?: string; wentFirst?: boolean }[];
+  matches?: {
+    result: 'W' | 'T' | 'L';
+    opponentDeckId?: string;
+    opponentDeck?: string;
+    opponentType?: string;
+    wentFirst?: boolean;
+  }[];
+}
+
+export interface DeckSummary {
+  id: string;
+  name: string;
+  type: string;
+  ownerLogin: string | null;
+  timesPlayedAgainst: number;
+  lastPlayedAgainst: string | null;
 }
 
 export interface AllowedUser {

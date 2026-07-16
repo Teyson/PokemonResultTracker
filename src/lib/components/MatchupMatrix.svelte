@@ -22,6 +22,8 @@
     total: number;
   }
 
+  let mode = $state<'win' | 'score'>('score');
+
   let matrix = $derived.by(() => {
     const rowMap = new Map<string, Row>();
     const colTotals = new Map<string, Col>();
@@ -56,15 +58,31 @@
     return c.w + c.t + c.l;
   }
 
+  // Win rate over decisive games only — ties are neutral and don't move it.
+  function winPct(c: Cell): number | null {
+    const decisive = c.w + c.l;
+    return decisive ? Math.round((c.w / decisive) * 100) : null;
+  }
+
   // Score rate on the same 0-3 ppg scale used everywhere else in the app, expressed as a percent.
-  function scorePct(c: Cell): number {
+  function scorePct(c: Cell): number | null {
     const g = games(c);
-    return g ? Math.round(((c.w * 3 + c.t) / (g * 3)) * 100) : 0;
+    return g ? Math.round(((c.w * 3 + c.t) / (g * 3)) * 100) : null;
+  }
+
+  function pctFor(c: Cell): number | null {
+    return mode === 'win' ? winPct(c) : scorePct(c);
   }
 </script>
 
 {#if matrix.rows.length > 0}
-  <div class="section-title">Matchups</div>
+  <div class="section-title">
+    Matchups
+    <div class="mode-toggle">
+      <button class:active={mode === 'score'} onclick={() => (mode = 'score')}>Score%</button>
+      <button class:active={mode === 'win'} onclick={() => (mode = 'win')}>Win%</button>
+    </div>
+  </div>
   <div class="matrix-scroll">
     <div class="matrix" style="grid-template-columns: 118px repeat({matrix.cols.length}, 82px)">
       <div class="cell corner"></div>
@@ -79,16 +97,17 @@
           {@const cell = row.opponents.get(col.key)}
           {@const g = cell ? games(cell) : 0}
           {@const lowData = cell !== undefined && g < 3}
+          {@const pct = cell ? pctFor(cell) : null}
           <div
             class="cell data"
             class:low={lowData}
-            style={cell && !lowData
-              ? `background: color-mix(in srgb, color-mix(in srgb, var(--win) ${scorePct(cell)}%, var(--loss)) 32%, transparent)`
+            style={cell && !lowData && pct !== null
+              ? `background: color-mix(in srgb, color-mix(in srgb, var(--win) ${pct}%, var(--loss)) 32%, transparent)`
               : ''}
           >
             {#if cell}
               <span class="rec">{cell.w}-{cell.t}-{cell.l}</span>
-              <span class="pct">{lowData ? 'low data' : `${scorePct(cell)}%`}</span>
+              <span class="pct">{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span>
             {:else}
               <span class="dash">—</span>
             {/if}
@@ -116,6 +135,28 @@
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .mode-toggle {
+    display: flex;
+    gap: 4px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .mode-toggle button {
+    font-family: inherit;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .mode-toggle button.active {
+    color: var(--text);
+    border-color: var(--muted2);
+    background: var(--panel2);
   }
   .matrix-scroll {
     overflow-x: auto;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, Night, NightInput } from '$lib/types';
+  import type { ClientPrincipal, Night, NightInput, DeckSummary } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
@@ -21,11 +21,15 @@
 
   let nights = $state<Night[]>([]);
   let nightsLoaded = $state(false);
+  let decks = $state<DeckSummary[]>([]);
   let editing = $state<Night | null>(null);
   let viewScope = $state<'mine' | 'all'>('mine');
 
   $effect(() => {
-    if (isMember && !nightsLoaded) loadNights();
+    if (isMember && !nightsLoaded) {
+      loadNights();
+      loadDecks();
+    }
   });
 
   async function loadNights() {
@@ -35,6 +39,14 @@
       nightsLoaded = true;
     } catch (e) {
       toast(`Could not load nights: ${(e as Error).message}`, true);
+    }
+  }
+
+  async function loadDecks() {
+    try {
+      decks = (await api<DeckSummary[]>('/api/decks')) ?? [];
+    } catch (e) {
+      toast(`Could not load decks: ${(e as Error).message}`, true);
     }
   }
 
@@ -55,7 +67,7 @@
       } else {
         await api('/api/nights', { method: 'POST', body: JSON.stringify(input) });
       }
-      await loadNights();
+      await Promise.all([loadNights(), loadDecks()]);
       editing = null;
       toast(editId ? 'Night updated' : 'Night logged');
     } catch (e) {
@@ -130,7 +142,14 @@
       </div>
 
       <Scoreboard {nights} />
-      <NightForm {nights} {editing} onSave={handleSave} onCancel={() => (editing = null)} />
+      <NightForm
+        {nights}
+        {decks}
+        {editing}
+        myLogin={auth.principal.userDetails}
+        onSave={handleSave}
+        onCancel={() => (editing = null)}
+      />
 
       <div class="section-title">
         Nights
@@ -143,8 +162,8 @@
       </div>
       <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
 
-      <DeckTable {nights} />
-      <MatchupMatrix {nights} />
+      <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+      <MatchupMatrix {nights} showOwner={isAdmin && viewScope === 'all'} />
 
       <div class="foot">
         <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br />

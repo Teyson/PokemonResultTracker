@@ -9,6 +9,7 @@
     "start": "npm run build && func start",
     "prestart": "npm run build",
     "db:generate": "drizzle-kit generate",
+    "db:wait": "node scripts/wait-for-db.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "seed": "tsx src/db/seed.ts"

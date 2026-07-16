@@ -210,6 +210,8 @@ instead, so quick-logged matches (no games) stay first-class.
 
 ### 6. Deck Elo rating
 
+> **Status: implemented in PR #38.**
+
 **What.** An Elo-style rating per deck, updated match-by-match when an opponent
 deck is recorded, shown as a column in `DeckTable` and a line on the deck detail
 page.

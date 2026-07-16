@@ -155,7 +155,9 @@
   }
   function selectOpponent(i: number, d: DeckOption) {
     matchRows = matchRows.map((r, idx) =>
-      idx === i ? { ...r, opponentIsNew: false, opponentName: d.name, opponentDeckId: d.id, opponentType: d.type } : r
+      idx === i
+        ? { ...r, opponentOpen: false, opponentIsNew: false, opponentName: d.name, opponentDeckId: d.id, opponentType: d.type }
+        : r
     );
   }
   function selectOpponentNew(i: number) {

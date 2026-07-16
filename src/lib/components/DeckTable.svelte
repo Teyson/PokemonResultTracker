@@ -78,30 +78,30 @@
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
         <div class="mono">{p}</div>
         <div class="mono gold">{g ? (p / g).toFixed(2) : '—'}</div>
-        {#if hasTurnOrder}
-          <button
-            type="button"
-            class="chev"
-            aria-expanded={expanded.has(key)}
-            aria-label="Toggle turn-order breakdown for {d.deck}"
-            onclick={() => toggleExpand(key)}>{expanded.has(key) ? '▴' : '▾'}</button
-          >
-        {:else}
-          <span></span>
-        {/if}
+        <button
+          type="button"
+          class="chev"
+          aria-expanded={expanded.has(key)}
+          aria-label="Toggle turn-order breakdown for {d.deck}"
+          onclick={() => toggleExpand(key)}>{expanded.has(key) ? '▴' : '▾'}</button
+        >
       </div>
-      {#if hasTurnOrder && expanded.has(key)}
+      {#if expanded.has(key)}
         <div class="turnrow">
-          <div class="to-cell">
-            <div class="to-lab">Going first</div>
-            <div class="to-rec">{d.first.w}–{d.first.t}–{d.first.l}</div>
-            <div class="to-ppg">{ppg(d.first).toFixed(2)} <span>ppg</span></div>
-          </div>
-          <div class="to-cell">
-            <div class="to-lab">Going second</div>
-            <div class="to-rec">{d.second.w}–{d.second.t}–{d.second.l}</div>
-            <div class="to-ppg">{ppg(d.second).toFixed(2)} <span>ppg</span></div>
-          </div>
+          {#if hasTurnOrder}
+            <div class="to-cell">
+              <div class="to-lab">Going first</div>
+              <div class="to-rec">{d.first.w}–{d.first.t}–{d.first.l}</div>
+              <div class="to-ppg">{ppg(d.first).toFixed(2)} <span>ppg</span></div>
+            </div>
+            <div class="to-cell">
+              <div class="to-lab">Going second</div>
+              <div class="to-rec">{d.second.w}–{d.second.t}–{d.second.l}</div>
+              <div class="to-ppg">{ppg(d.second).toFixed(2)} <span>ppg</span></div>
+            </div>
+          {:else}
+            <div class="to-empty">Not enough turn-order data yet — needs at least 3 logged games.</div>
+          {/if}
         </div>
       {/if}
     {/each}
@@ -134,7 +134,7 @@
   }
   .drow {
     display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
+    grid-template-columns: 1fr 92px 56px 64px 24px;
     gap: 10px;
     align-items: center;
     padding: 11px 13px;
@@ -151,6 +151,9 @@
     letter-spacing: 0.13em;
     text-transform: uppercase;
     color: var(--muted);
+  }
+  .drow.head span:not(:first-child) {
+    text-align: right;
   }
   .drow .dname {
     display: flex;
@@ -237,5 +240,12 @@
     font-size: 9px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+  }
+  .to-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 10px 4px;
   }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
   import { colorOf, fmtDate, nightlyPpgSeries, ppg } from '$lib/pokemon';
+  import { deckElo, deckRatingTrend } from '$lib/elo';
   import { slide } from 'svelte/transition';
   import TypeIcon from './TypeIcon.svelte';
   import Sparkline from './Sparkline.svelte';
@@ -97,6 +98,11 @@
       return (b.w * 3 + b.t) / (gb || 1) - (a.w * 3 + a.t) / (ga || 1);
     });
   });
+
+  // Elo is keyed by deck name alone, not owner+name like `decks` above — see
+  // src/lib/elo.ts. Computed once over the full nights array so every row
+  // (even same-named decks under different owners) reads the same replay.
+  let eloRatings = $derived.by(() => deckElo(nights));
 
   let expanded = $state<Set<string>>(new Set());
 
@@ -199,13 +205,15 @@
   <div class="section-title">By deck</div>
   <div class="decktable">
     <div class="drow head">
-      <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span>Form</span><span></span>
+      <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span>Elo</span><span>Form</span><span
+      ></span>
     </div>
     {#each decks as d (d.key)}
       {@const g = d.w + d.t + d.l}
       {@const p = d.w * 3 + d.t}
       {@const hasTurnOrder = games(d.first) + games(d.second) >= 3}
       {@const form = nightlyPpgSeries(d.history, FORM_WINDOW)}
+      {@const elo = eloRatings.get(d.deck.trim().toLowerCase())}
       <div class="drow">
         <div class="dname">
           <TypeIcon type={d.type} size={16} /><span class="dname-text">{d.deck}</span>
@@ -214,6 +222,7 @@
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
         <div class="mono">{p}</div>
         <div class="mono gold">{g ? (p / g).toFixed(2) : '—'}</div>
+        <div class="mono">{elo && elo.games > 0 ? Math.round(elo.rating) : '—'}</div>
         <div class="spark-cell"><Sparkline values={form} color={colorOf(d.type)} /></div>
         <button
           type="button"
@@ -229,13 +238,16 @@
         {@const turnOrderId = `${d.key}:turnOrder`}
         {@const matchupsId = `${d.key}:matchups`}
         {@const opponentTypesId = `${d.key}:opponentTypes`}
+        {@const ratingId = `${d.key}:rating`}
         {@const trendId = `${d.key}:trend`}
         {@const historyId = `${d.key}:history`}
         {@const turnOrderOpen = isOpen(turnOrderId, true)}
         {@const matchupsOpen = isOpen(matchupsId, true)}
         {@const opponentTypesOpen = isOpen(opponentTypesId, false)}
+        {@const ratingOpen = isOpen(ratingId, false)}
         {@const trendOpen = isOpen(trendId, false)}
         {@const historyOpen = isOpen(historyId, false)}
+        {@const ratingTrend = deckRatingTrend(nights, d.deck, FORM_WINDOW)}
         <div class="aggrow" transition:slide={{ duration: 220 }}>
           <div class="subsection">
             <button
@@ -378,6 +390,40 @@
             <button
               type="button"
               class="sub-toggle"
+              aria-expanded={ratingOpen}
+              onclick={() => toggleSection(ratingId)}
+            >
+              <span class="agg-lab">Rating</span>
+              <span class="sub-chev">{ratingOpen ? '▴' : '▾'}</span>
+            </button>
+            {#if ratingOpen}
+              <div transition:slide={{ duration: 200 }}>
+                {#if elo && elo.games > 0}
+                  <div class="to-grid">
+                    <div class="to-cell">
+                      <div class="to-lab">Elo rating</div>
+                      <div class="to-rec">{Math.round(elo.rating)}</div>
+                      <div class="to-ppg">{elo.games} rated {elo.games === 1 ? 'game' : 'games'}</div>
+                    </div>
+                    <div class="to-cell rating-trend-cell">
+                      <div class="to-lab">Trend</div>
+                      <div class="rating-spark">
+                        <Sparkline values={ratingTrend} color={colorOf(d.type)} autoScale width={80} height={22} />
+                      </div>
+                    </div>
+                  </div>
+                {:else}
+                  <div class="to-empty">
+                    No Elo rating yet — needs at least one match with an opponent deck recorded.
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
               aria-expanded={trendOpen}
               onclick={() => toggleSection(trendId)}
             >
@@ -449,7 +495,7 @@
   }
   .drow {
     display: grid;
-    grid-template-columns: 1fr 92px 56px 64px 48px 24px;
+    grid-template-columns: 1fr 92px 56px 64px 56px 48px 24px;
     gap: 10px;
     align-items: center;
     padding: 11px 13px;
@@ -470,7 +516,7 @@
   .drow.head span:not(:first-child) {
     text-align: right;
   }
-  .drow.head span:nth-child(5) {
+  .drow.head span:nth-child(6) {
     text-align: center;
   }
   .drow .dname {
@@ -574,6 +620,16 @@
     font-size: 9px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+  }
+  .rating-trend-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .rating-spark {
+    display: flex;
+    justify-content: center;
+    margin-top: 2px;
   }
   .to-empty {
     text-align: center;

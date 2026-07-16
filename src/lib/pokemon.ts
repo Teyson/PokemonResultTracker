@@ -31,7 +31,9 @@ export function ppg(n: Pick<Night, 'w' | 't' | 'l'>): number {
   return g ? pts(n) / g : 0;
 }
 
-function sortedByDate(nights: Night[]): Night[] {
+// Exported so other chronological-replay logic (e.g. src/lib/elo.ts) uses the
+// exact same tie-break order rather than redefining it.
+export function sortedByDate(nights: Night[]): Night[] {
   return [...nights].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id.localeCompare(b.id)));
 }
 

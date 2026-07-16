@@ -49,6 +49,18 @@ jobs:
             --end-ip-address 255.255.255.255
           # Firewall changes can take a few seconds to propagate.
           sleep 15
+      # Azure SQL's serverless tier auto-pauses when idle, and drizzle-kit's
+      # own connection attempt in the next step has a fixed ~15s timeout that
+      # isn't enough to wait out a cold start. Retry a plain connection with a
+      # much longer per-attempt timeout first, so migrate lands on an
+      # already-awake database instead of racing the wake-up.
+      - name: Wake the database (serverless tier may be paused)
+        run: npm run db:wait
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
+          SQL_USER: ${{ secrets.SQL_USER }}
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
       - run: npm run db:migrate
         env:
           SQL_SERVER: ${{ secrets.SQL_SERVER }}

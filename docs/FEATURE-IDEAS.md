@@ -733,6 +733,8 @@ graceful broken-image fallback to the TypeIcon.
 
 ### 26. Achievements & badges
 
+> **Status: implemented in PR #39**
+
 **What.** Automatically-earned badges rendered on the main page and next to
 player names: "First Blood" (first win), "Perfect Night" (3+ wins, 0 losses),
 "Loyalist" (10 nights on one deck), "Scientist" (5 different decks), "Iron

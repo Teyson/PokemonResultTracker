@@ -17,6 +17,15 @@
   function confirmDelete(n: Night) {
     if (confirm(`Delete ${n.deck} — ${fmtDate(n.date)}?`)) onDelete(n);
   }
+
+  let expanded = $state<Set<string>>(new Set());
+
+  function toggleExpand(id: string) {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expanded = next;
+  }
 </script>
 
 {#if nights.length === 0}
@@ -25,30 +34,59 @@
   {#each nights as n (n.id)}
     <div class="night">
       <div class="spine" style="background:{colorOf(n.type)}"></div>
-      <div class="body">
-        <div class="top">
-          <span class="deck">{n.deck}</span>
-          <span class="chip" style="background:{colorOf(n.type)}22;color:{colorOf(n.type)}">{n.type}</span>
+      <div class="content">
+        <div class="mainrow">
+          <div class="body">
+            <div class="top">
+              <span class="deck">{n.deck}</span>
+              <span class="chip" style="background:{colorOf(n.type)}22;color:{colorOf(n.type)}">{n.type}</span>
+            </div>
+            <div class="date">
+              {fmtDate(n.date)}
+              {#if showOwner}<span class="owner">· {n.createdBy}</span>{/if}
+            </div>
+            {#if n.matches && n.matches.length > 0}
+              <button
+                type="button"
+                class="matchstrip"
+                aria-expanded={expanded.has(n.id)}
+                aria-label="Toggle match details"
+                onclick={() => toggleExpand(n.id)}
+              >
+                {#each n.matches as m (m.roundNo)}
+                  <span class="mchip {m.result.toLowerCase()}">{m.result}</span>
+                {/each}
+                <span class="chev">{expanded.has(n.id) ? '▴' : '▾'}</span>
+              </button>
+            {/if}
+          </div>
+          <div class="stats">
+            <div class="record">{n.w}<span class="s">–</span>{n.t}<span class="s">–</span>{n.l}</div>
+            <div class="ppg"><div class="v">{ppg(n).toFixed(2)}</div><div class="k">{pts(n)} pts</div></div>
+            <div class="rowbtns">
+              <button title="Edit" aria-label="Edit night" onclick={() => onEdit(n)}>✎</button>
+              <button class="del" title="Delete" aria-label="Delete night" onclick={() => confirmDelete(n)}>✕</button>
+            </div>
+          </div>
         </div>
-        <div class="date">
-          {fmtDate(n.date)}
-          {#if showOwner}<span class="owner">· {n.createdBy}</span>{/if}
-        </div>
-        {#if n.matches && n.matches.length > 0}
-          <div class="matchstrip" aria-label="Match results">
+        {#if expanded.has(n.id) && n.matches && n.matches.length > 0}
+          <div class="matchdetail">
             {#each n.matches as m (m.roundNo)}
-              <span class="mchip {m.result.toLowerCase()}">{m.result}</span>
+              <div class="mrow">
+                <span class="mchip lg {m.result.toLowerCase()}">{m.result}</span>
+                <span class="rn">R{m.roundNo}</span>
+                {#if m.opponentDeck}
+                  <span
+                    class="vspill"
+                    style="background:{colorOf(m.opponentType ?? 'Colorless')}22;color:{colorOf(
+                      m.opponentType ?? 'Colorless'
+                    )}">vs {m.opponentDeck}</span
+                  >
+                {/if}
+              </div>
             {/each}
           </div>
         {/if}
-      </div>
-      <div class="stats">
-        <div class="record">{n.w}<span class="s">–</span>{n.t}<span class="s">–</span>{n.l}</div>
-        <div class="ppg"><div class="v">{ppg(n).toFixed(2)}</div><div class="k">{pts(n)} pts</div></div>
-        <div class="rowbtns">
-          <button title="Edit" aria-label="Edit night" onclick={() => onEdit(n)}>✎</button>
-          <button class="del" title="Delete" aria-label="Delete night" onclick={() => confirmDelete(n)}>✕</button>
-        </div>
       </div>
     </div>
   {/each}
@@ -70,7 +108,6 @@
   }
   .night {
     display: flex;
-    align-items: center;
     gap: 12px;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -85,6 +122,15 @@
     align-self: stretch;
     flex: 0 0 auto;
     border-radius: 0 3px 3px 0;
+  }
+  .night .content {
+    flex: 1;
+    min-width: 0;
+  }
+  .night .mainrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
   .night .body {
     flex: 1;
@@ -121,9 +167,24 @@
   }
   .matchstrip {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: 3px;
     margin-top: 6px;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .matchstrip:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .chev {
+    color: var(--muted);
+    font-size: 9px;
+    margin-left: 3px;
   }
   .mchip {
     width: 16px;
@@ -137,6 +198,13 @@
     justify-content: center;
     line-height: 1;
   }
+  .mchip.lg {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
   .mchip.w {
     background: var(--win);
     color: #08110a;
@@ -148,6 +216,30 @@
   .mchip.l {
     background: var(--loss);
     color: #fff;
+  }
+  .matchdetail {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mrow .rn {
+    font-size: 11px;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+  .vspill {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
   }
   .night .stats {
     display: flex;

@@ -32,6 +32,6 @@
   }
   .toast.err {
     border-color: var(--red);
-    color: #ffd7db;
+    color: var(--error-text);
   }
 </style>

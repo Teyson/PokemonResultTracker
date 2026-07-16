@@ -5,6 +5,7 @@
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -139,6 +140,7 @@
         <a class="back" href="/">← Tracker</a>
         <a class="back" href="/decks">Manage decks</a>
         <a class="back" href="/logout">Sign out</a>
+        <ThemeToggle />
       </div>
       <h1>League members</h1>
       <div class="sub">
@@ -305,7 +307,7 @@
     font-family: inherit;
   }
   .add input::placeholder {
-    color: #565b74;
+    color: var(--muted2);
   }
   .add input:focus {
     outline: none;
@@ -402,7 +404,7 @@
     border: 1px solid rgba(246, 201, 69, 0.3);
   }
   .pill.member {
-    color: var(--win);
+    color: var(--win-text);
     background: rgba(78, 203, 113, 0.1);
     border: 1px solid rgba(78, 203, 113, 0.28);
   }
@@ -438,7 +440,7 @@
     margin-bottom: 10px;
   }
   .search::placeholder {
-    color: #565b74;
+    color: var(--muted2);
   }
   .search:focus {
     outline: none;

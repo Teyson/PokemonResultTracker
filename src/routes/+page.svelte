@@ -11,6 +11,7 @@
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -132,6 +133,7 @@
         {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>
           <a class="tlink admin" href="/decks">Manage decks</a>{/if}
         <a class="tlink" href="/logout">Sign out</a>
+        <ThemeToggle />
       </div>
 
       <div class="masthead">

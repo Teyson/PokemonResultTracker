@@ -120,13 +120,13 @@
     color: var(--muted);
   }
   .wtl .w .num {
-    color: var(--win);
+    color: var(--win-text);
   }
   .wtl .t .num {
-    color: var(--tie);
+    color: var(--tie-text);
   }
   .wtl .l .num {
-    color: var(--loss);
+    color: var(--loss-text);
   }
   .readouts {
     display: grid;

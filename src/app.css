@@ -14,8 +14,33 @@
   --win: #4ecb71;
   --tie: #f6c945;
   --loss: #ef5a6a;
+  /* Standalone-text variants of win/tie/loss: identical to the swatch colors here,
+     but overridden in the light theme below, where the swatch colors stay vivid
+     (they're paired with fixed-contrast badge text) while plain text on the page
+     background needs a deeper, more legible shade. */
+  --win-text: var(--win);
+  --tie-text: var(--gold);
+  --loss-text: var(--loss);
+  --error-text: #ffd7db;
   --display: 'Chakra Petch', 'Segoe UI Semibold', system-ui, sans-serif;
   --sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+:root[data-theme='light'] {
+  --ink: #f5f6fb;
+  --ink2: #eaecf5;
+  --panel: #ffffff;
+  --panel2: #e8eaf4;
+  --line: #dde1ee;
+  --text: #1b1e2c;
+  --muted: #6a7089;
+  --muted2: #9599ad;
+  --red: #dc2436;
+  --red-deep: #a01827;
+  --gold: #96700a;
+  --win-text: #1f8a4c;
+  --loss-text: #c22f3d;
+  --error-text: #7a1c28;
 }
 
 * {
@@ -55,6 +80,10 @@ body {
   padding: 18px 14px 60px;
 }
 
+:root[data-theme='light'] body {
+  background: radial-gradient(1200px 500px at 50% -200px, #ffffff 0%, transparent 60%), var(--ink);
+}
+
 input[type='date'],
 input[type='text'] {
   width: 100%;
@@ -67,7 +96,7 @@ input[type='text'] {
   font-family: inherit;
 }
 input[type='text']::placeholder {
-  color: #565b74;
+  color: var(--muted2);
 }
 input:focus {
   outline: none;

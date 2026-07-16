@@ -1,8 +1,11 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { ppg } from '$lib/pokemon';
+  import { colorOf, nightlyPpgSeries, ppg } from '$lib/pokemon';
   import { slide } from 'svelte/transition';
   import TypeIcon from './TypeIcon.svelte';
+  import Sparkline from './Sparkline.svelte';
+
+  const FORM_WINDOW = 8;
 
   let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
@@ -28,6 +31,7 @@
     second: WTL;
     opponents: Map<string, MatchupCell>;
     opponentTypes: Map<string, MatchupCell>;
+    history: Night[];
   }
 
   function emptyWtl(): WTL {
@@ -53,11 +57,13 @@
           first: emptyWtl(),
           second: emptyWtl(),
           opponents: new Map(),
-          opponentTypes: new Map()
+          opponentTypes: new Map(),
+          history: [] as Night[]
         } satisfies DeckAgg);
       agg.w += n.w;
       agg.t += n.t;
       agg.l += n.l;
+      agg.history.push(n);
       for (const m of n.matches ?? []) {
         if (m.wentFirst !== undefined) {
           const bucket = m.wentFirst ? agg.first : agg.second;
@@ -173,12 +179,13 @@
   <div class="section-title">By deck</div>
   <div class="decktable">
     <div class="drow head">
-      <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span></span>
+      <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span>Form</span><span></span>
     </div>
     {#each decks as d (d.key)}
       {@const g = d.w + d.t + d.l}
       {@const p = d.w * 3 + d.t}
       {@const hasTurnOrder = games(d.first) + games(d.second) >= 3}
+      {@const form = nightlyPpgSeries(d.history, FORM_WINDOW)}
       <div class="drow">
         <div class="dname">
           <TypeIcon type={d.type} size={16} /><span class="dname-text">{d.deck}</span>
@@ -187,6 +194,7 @@
         <div class="mono">{d.w}-{d.t}-{d.l}</div>
         <div class="mono">{p}</div>
         <div class="mono gold">{g ? (p / g).toFixed(2) : '—'}</div>
+        <div class="spark-cell"><Sparkline values={form} color={colorOf(d.type)} /></div>
         <button
           type="button"
           class="chev"
@@ -318,7 +326,7 @@
   }
   .drow {
     display: grid;
-    grid-template-columns: 1fr 92px 56px 64px 24px;
+    grid-template-columns: 1fr 92px 56px 64px 48px 24px;
     gap: 10px;
     align-items: center;
     padding: 11px 13px;
@@ -338,6 +346,9 @@
   }
   .drow.head span:not(:first-child) {
     text-align: right;
+  }
+  .drow.head span:nth-child(5) {
+    text-align: center;
   }
   .drow .dname {
     display: flex;
@@ -367,6 +378,11 @@
   }
   .drow .mono.gold {
     color: var(--gold);
+  }
+  .spark-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   .chev {
     flex: 0 0 auto;

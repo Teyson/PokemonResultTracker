@@ -263,7 +263,7 @@
   {#if detailed}
     <div class="matches">
       {#each matchRows as row, i (i)}
-        <div class="matchrow">
+        <div class="matchrow" transition:slide={{ duration: 220 }}>
           <span class="rn">R{i + 1}</span>
           <div class="seg" role="group" aria-label="Match {i + 1} result">
             {#each MATCH_RESULTS as r (r)}

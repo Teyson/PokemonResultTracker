@@ -9,6 +9,7 @@
   import NightForm from '$lib/components/NightForm.svelte';
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
+  import MatchupMatrix from '$lib/components/MatchupMatrix.svelte';
   import Toast from '$lib/components/Toast.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
@@ -143,6 +144,7 @@
       <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
 
       <DeckTable {nights} />
+      <MatchupMatrix {nights} />
 
       <div class="foot">
         <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br />

@@ -107,9 +107,12 @@
     expanded = next;
   }
 
-  // Trend/history are the sections most likely to grow large (a full chart, a
-  // whole season of nights), so they stay collapsed inside the foldout by
-  // default rather than always rendering alongside the compact stat sections.
+  // Every subsection inside a deck's foldout is independently foldable, each
+  // with its own default (Turn order / Matchups open, the rest — Opponent
+  // types / Trend / History — folded, since those are the ones most likely to
+  // grow large). `expandedSections` only ever holds ids that have been
+  // toggled *away* from their default, so `isOpen` XORs membership against
+  // the default to get the effective state.
   let expandedSections = $state<Set<string>>(new Set());
 
   function toggleSection(id: string) {
@@ -117,6 +120,10 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     expandedSections = next;
+  }
+
+  function isOpen(id: string, defaultOpen: boolean): boolean {
+    return expandedSections.has(id) !== defaultOpen;
   }
 
   function games(r: WTL): number {
@@ -219,107 +226,165 @@
       {#if expanded.has(d.key)}
         {@const opponents = sortedOpponents(d)}
         {@const opponentTypes = sortedOpponentTypes(d)}
+        {@const turnOrderId = `${d.key}:turnOrder`}
+        {@const matchupsId = `${d.key}:matchups`}
+        {@const opponentTypesId = `${d.key}:opponentTypes`}
         {@const trendId = `${d.key}:trend`}
         {@const historyId = `${d.key}:history`}
+        {@const turnOrderOpen = isOpen(turnOrderId, true)}
+        {@const matchupsOpen = isOpen(matchupsId, true)}
+        {@const opponentTypesOpen = isOpen(opponentTypesId, false)}
+        {@const trendOpen = isOpen(trendId, false)}
+        {@const historyOpen = isOpen(historyId, false)}
         <div class="aggrow" transition:slide={{ duration: 220 }}>
-          <div class="agg-section">
-            <div class="agg-lab">Turn order</div>
-            {#if hasTurnOrder}
-              <div class="to-grid">
-                <div class="to-cell">
-                  <div class="to-lab">Going first</div>
-                  <div class="to-rec">{d.first.w}–{d.first.t}–{d.first.l}</div>
-                  <div class="to-ppg">{ppg(d.first).toFixed(2)} <span>ppg</span></div>
-                </div>
-                <div class="to-cell">
-                  <div class="to-lab">Going second</div>
-                  <div class="to-rec">{d.second.w}–{d.second.t}–{d.second.l}</div>
-                  <div class="to-ppg">{ppg(d.second).toFixed(2)} <span>ppg</span></div>
-                </div>
-              </div>
-            {:else}
-              <div class="to-empty">Not enough turn-order data yet — needs at least 3 logged games.</div>
-            {/if}
-          </div>
-          <div class="agg-section">
-            <div class="agg-lab">Matchups</div>
-            {#if opponents.length > 0}
-              <div class="mu-table">
-                <div class="mu-row mu-head">
-                  <button type="button" onclick={() => toggleMatchupSort('name')}>Opponent{matchupSortArrow('name')}</button>
-                  <button type="button" onclick={() => toggleMatchupSort('record')}>Record{matchupSortArrow('record')}</button>
-                  <button type="button" onclick={() => toggleMatchupSort('score')}>Score%{matchupSortArrow('score')}</button>
-                  <button type="button" onclick={() => toggleMatchupSort('ppg')}>PPG{matchupSortArrow('ppg')}</button>
-                </div>
-                {#each opponents as opp (opp.name)}
-                  {@const g = games(opp)}
-                  {@const lowData = g < 3}
-                  {@const pct = scorePct(opp)}
-                  {@const ppgVal = ppg(opp)}
-                  <div class="mu-row">
-                    <span class="mu-name">{opp.name}</span>
-                    <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
-                    <span
-                      class="mu-val"
-                      class:low={lowData}
-                      style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
-                      >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
-                    >
-                    <span class="mu-val" class:low={lowData} style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
-                      >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
-                    >
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
+              aria-expanded={turnOrderOpen}
+              onclick={() => toggleSection(turnOrderId)}
+            >
+              <span class="agg-lab">Turn order</span>
+              <span class="sub-chev">{turnOrderOpen ? '▴' : '▾'}</span>
+            </button>
+            {#if turnOrderOpen}
+              <div transition:slide={{ duration: 200 }}>
+                {#if hasTurnOrder}
+                  <div class="to-grid">
+                    <div class="to-cell">
+                      <div class="to-lab">Going first</div>
+                      <div class="to-rec">{d.first.w}–{d.first.t}–{d.first.l}</div>
+                      <div class="to-ppg">{ppg(d.first).toFixed(2)} <span>ppg</span></div>
+                    </div>
+                    <div class="to-cell">
+                      <div class="to-lab">Going second</div>
+                      <div class="to-rec">{d.second.w}–{d.second.t}–{d.second.l}</div>
+                      <div class="to-ppg">{ppg(d.second).toFixed(2)} <span>ppg</span></div>
+                    </div>
                   </div>
-                {/each}
+                {:else}
+                  <div class="to-empty">Not enough turn-order data yet — needs at least 3 logged games.</div>
+                {/if}
               </div>
-            {:else}
-              <div class="to-empty">No opponent decks logged yet.</div>
-            {/if}
-          </div>
-          <div class="agg-section">
-            <div class="agg-lab">Opponent types</div>
-            {#if opponentTypes.length > 0}
-              <div class="mu-table">
-                <div class="mu-row mu-head">
-                  <button type="button" onclick={() => toggleTypeSort('name')}>Type{typeSortArrow('name')}</button>
-                  <button type="button" onclick={() => toggleTypeSort('record')}>Record{typeSortArrow('record')}</button>
-                  <button type="button" onclick={() => toggleTypeSort('score')}>Score%{typeSortArrow('score')}</button>
-                  <button type="button" onclick={() => toggleTypeSort('ppg')}>PPG{typeSortArrow('ppg')}</button>
-                </div>
-                {#each opponentTypes as opp (opp.name)}
-                  {@const g = games(opp)}
-                  {@const lowData = g < 3}
-                  {@const pct = scorePct(opp)}
-                  {@const ppgVal = ppg(opp)}
-                  <div class="mu-row">
-                    <span class="mu-name"><TypeIcon type={opp.name} size={16} />{opp.name}</span>
-                    <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
-                    <span
-                      class="mu-val"
-                      class:low={lowData}
-                      style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
-                      >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
-                    >
-                    <span class="mu-val" class:low={lowData} style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
-                      >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
-                    >
-                  </div>
-                {/each}
-              </div>
-            {:else}
-              <div class="to-empty">No opponent types logged yet.</div>
             {/if}
           </div>
           <div class="subsection">
             <button
               type="button"
               class="sub-toggle"
-              aria-expanded={expandedSections.has(trendId)}
+              aria-expanded={matchupsOpen}
+              onclick={() => toggleSection(matchupsId)}
+            >
+              <span class="agg-lab">Matchups</span>
+              <span class="sub-chev">{matchupsOpen ? '▴' : '▾'}</span>
+            </button>
+            {#if matchupsOpen}
+              <div transition:slide={{ duration: 200 }}>
+                {#if opponents.length > 0}
+                  <div class="mu-table">
+                    <div class="mu-row mu-head">
+                      <button type="button" onclick={() => toggleMatchupSort('name')}
+                        >Opponent{matchupSortArrow('name')}</button
+                      >
+                      <button type="button" onclick={() => toggleMatchupSort('record')}
+                        >Record{matchupSortArrow('record')}</button
+                      >
+                      <button type="button" onclick={() => toggleMatchupSort('score')}
+                        >Score%{matchupSortArrow('score')}</button
+                      >
+                      <button type="button" onclick={() => toggleMatchupSort('ppg')}>PPG{matchupSortArrow('ppg')}</button>
+                    </div>
+                    {#each opponents as opp (opp.name)}
+                      {@const g = games(opp)}
+                      {@const lowData = g < 3}
+                      {@const pct = scorePct(opp)}
+                      {@const ppgVal = ppg(opp)}
+                      <div class="mu-row">
+                        <span class="mu-name">{opp.name}</span>
+                        <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
+                        <span
+                          class="mu-val"
+                          class:low={lowData}
+                          style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
+                          >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
+                        >
+                        <span
+                          class="mu-val"
+                          class:low={lowData}
+                          style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
+                          >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
+                        >
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="to-empty">No opponent decks logged yet.</div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
+              aria-expanded={opponentTypesOpen}
+              onclick={() => toggleSection(opponentTypesId)}
+            >
+              <span class="agg-lab">Opponent types</span>
+              <span class="sub-chev">{opponentTypesOpen ? '▴' : '▾'}</span>
+            </button>
+            {#if opponentTypesOpen}
+              <div transition:slide={{ duration: 200 }}>
+                {#if opponentTypes.length > 0}
+                  <div class="mu-table">
+                    <div class="mu-row mu-head">
+                      <button type="button" onclick={() => toggleTypeSort('name')}>Type{typeSortArrow('name')}</button>
+                      <button type="button" onclick={() => toggleTypeSort('record')}
+                        >Record{typeSortArrow('record')}</button
+                      >
+                      <button type="button" onclick={() => toggleTypeSort('score')}>Score%{typeSortArrow('score')}</button>
+                      <button type="button" onclick={() => toggleTypeSort('ppg')}>PPG{typeSortArrow('ppg')}</button>
+                    </div>
+                    {#each opponentTypes as opp (opp.name)}
+                      {@const g = games(opp)}
+                      {@const lowData = g < 3}
+                      {@const pct = scorePct(opp)}
+                      {@const ppgVal = ppg(opp)}
+                      <div class="mu-row">
+                        <span class="mu-name"><TypeIcon type={opp.name} size={16} />{opp.name}</span>
+                        <span class="mu-rec">{opp.w}-{opp.t}-{opp.l}</span>
+                        <span
+                          class="mu-val"
+                          class:low={lowData}
+                          style={!lowData && pct !== null ? `color: ${pctColor(pct)}` : ''}
+                          >{lowData ? 'low data' : pct !== null ? `${pct}%` : 'all ties'}</span
+                        >
+                        <span
+                          class="mu-val"
+                          class:low={lowData}
+                          style={!lowData ? `color: ${pctColor((ppgVal / 3) * 100)}` : ''}
+                          >{lowData ? 'low data' : ppgVal.toFixed(2)}</span
+                        >
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="to-empty">No opponent types logged yet.</div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="subsection">
+            <button
+              type="button"
+              class="sub-toggle"
+              aria-expanded={trendOpen}
               onclick={() => toggleSection(trendId)}
             >
               <span class="agg-lab">Trend</span>
-              <span class="sub-chev">{expandedSections.has(trendId) ? '▴' : '▾'}</span>
+              <span class="sub-chev">{trendOpen ? '▴' : '▾'}</span>
             </button>
-            {#if expandedSections.has(trendId)}
+            {#if trendOpen}
               <div transition:slide={{ duration: 200 }}>
                 {#if d.history.length >= 2}
                   <TrendChart nights={d.history} avg={g ? (p / g).toFixed(2) : '—'} />
@@ -333,13 +398,13 @@
             <button
               type="button"
               class="sub-toggle"
-              aria-expanded={expandedSections.has(historyId)}
+              aria-expanded={historyOpen}
               onclick={() => toggleSection(historyId)}
             >
               <span class="agg-lab">History ({d.history.length})</span>
-              <span class="sub-chev">{expandedSections.has(historyId) ? '▴' : '▾'}</span>
+              <span class="sub-chev">{historyOpen ? '▴' : '▾'}</span>
             </button>
-            {#if expandedSections.has(historyId)}
+            {#if historyOpen}
               <div class="hist-table" transition:slide={{ duration: 200 }}>
                 {#each d.history as n (n.id)}
                   <div class="hist-row">

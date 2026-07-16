@@ -1,0 +1,2 @@
+ALTER TABLE [matches] ADD [opponent_deck_id] int;--> statement-breakpoint
+ALTER TABLE [matches] ADD CONSTRAINT [matches_opponent_deck_id_decks_id_fk] FOREIGN KEY ([opponent_deck_id]) REFERENCES [decks]([id]);

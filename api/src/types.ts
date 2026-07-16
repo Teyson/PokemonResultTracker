@@ -1,6 +1,8 @@
 export interface MatchResponse {
   roundNo: number;
   result: 'W' | 'T' | 'L';
+  opponentDeck?: string;
+  opponentType?: string;
 }
 
 export interface NightResponse {

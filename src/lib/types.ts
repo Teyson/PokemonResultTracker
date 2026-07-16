@@ -1,6 +1,8 @@
 export interface Match {
   roundNo: number;
   result: 'W' | 'T' | 'L';
+  opponentDeck?: string;
+  opponentType?: string;
 }
 
 export interface Night {
@@ -23,7 +25,7 @@ export interface NightInput {
   w: number;
   t: number;
   l: number;
-  matches?: { result: 'W' | 'T' | 'L' }[];
+  matches?: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType?: string }[];
 }
 
 export interface AllowedUser {

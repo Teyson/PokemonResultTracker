@@ -1,8 +1,10 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { z } from 'zod';
-import { eq, inArray, sql, asc, desc } from 'drizzle-orm';
+import { eq, inArray, asc, desc } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/mssql-core';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
+import { upsertDeck } from '../db/decks';
 import { ensureUser } from '../db/userDirectory';
 import { getUser, resolveRole } from '../auth';
 import type { MatchResponse, NightResponse } from '../types';
@@ -33,7 +35,13 @@ const nonNegativeInt = z.preprocess((v) => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }, z.number().int().min(0));
 
-const matchInputSchema = z.object({ result: z.enum(['W', 'T', 'L']) });
+const matchInputSchema = z.object({
+  result: z.enum(['W', 'T', 'L']),
+  // Optional: what the opponent was playing. opponentType defaults the same
+  // way the top-level deck type does when a brand new opponent deck is named.
+  opponentDeck: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined), z.string().optional()),
+  opponentType: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : 'Colorless'), z.string())
+});
 
 const nightInputSchema = z.object({
   date: z
@@ -99,24 +107,73 @@ function deriveTotals(matchList: { result: 'W' | 'T' | 'L' }[]): { w: number; t:
 }
 
 /** Replaces a night's match log in place (delete-then-insert), assigning sequential round numbers. */
-async function writeMatches(db: DbOrTx, nightId: number, matchList: { result: 'W' | 'T' | 'L' }[]): Promise<void> {
+async function writeMatches(
+  db: DbOrTx,
+  nightId: number,
+  matchList: { result: 'W' | 'T' | 'L'; opponentDeckId?: number }[]
+): Promise<void> {
   await db.delete(matches).where(eq(matches.nightId, nightId));
   if (matchList.length === 0) return;
-  await db.insert(matches).values(matchList.map((m, i) => ({ nightId, roundNo: i + 1, result: m.result })));
+  await db
+    .insert(matches)
+    .values(
+      matchList.map((m, i) => ({ nightId, roundNo: i + 1, result: m.result, opponentDeckId: m.opponentDeckId ?? null }))
+    );
 }
+
+/**
+ * Upserts the opponent deck named on each match (if any) and resolves it to an
+ * id, ready for writeMatches. A small in-call cache avoids re-upserting the
+ * same opponent deck once per match within a single night.
+ */
+async function resolveMatchOpponents(
+  db: Db,
+  matchList: { result: 'W' | 'T' | 'L'; opponentDeck?: string; opponentType: string }[]
+): Promise<{ result: 'W' | 'T' | 'L'; opponentDeckId?: number }[]> {
+  const cache = new Map<string, number>();
+  const resolved: { result: 'W' | 'T' | 'L'; opponentDeckId?: number }[] = [];
+  for (const m of matchList) {
+    if (!m.opponentDeck) {
+      resolved.push({ result: m.result });
+      continue;
+    }
+    const key = m.opponentDeck.toLowerCase();
+    let id = cache.get(key);
+    if (id === undefined) {
+      id = await upsertDeck(db, m.opponentDeck, m.opponentType);
+      cache.set(key, id);
+    }
+    resolved.push({ result: m.result, opponentDeckId: id });
+  }
+  return resolved;
+}
+
+const opponentDecks = alias(decks, 'opponent_decks');
 
 /** Batch-fetches match logs for a set of nights, keyed by night id, ordered by round. */
 async function fetchMatchesFor(db: Db, nightIds: number[]): Promise<Map<number, MatchResponse[]>> {
   const byNight = new Map<number, MatchResponse[]>();
   if (nightIds.length === 0) return byNight;
   const rows = await db
-    .select({ nightId: matches.nightId, roundNo: matches.roundNo, result: matches.result })
+    .select({
+      nightId: matches.nightId,
+      roundNo: matches.roundNo,
+      result: matches.result,
+      opponentDeck: opponentDecks.name,
+      opponentType: opponentDecks.energyType
+    })
     .from(matches)
+    .leftJoin(opponentDecks, eq(opponentDecks.id, matches.opponentDeckId))
     .where(inArray(matches.nightId, nightIds))
     .orderBy(asc(matches.nightId), asc(matches.roundNo));
   for (const row of rows) {
     const list = byNight.get(row.nightId) ?? [];
-    list.push({ roundNo: row.roundNo, result: row.result as 'W' | 'T' | 'L' });
+    const m: MatchResponse = { roundNo: row.roundNo, result: row.result as 'W' | 'T' | 'L' };
+    if (row.opponentDeck) {
+      m.opponentDeck = row.opponentDeck;
+      m.opponentType = row.opponentType ?? 'Colorless';
+    }
+    list.push(m);
     byNight.set(row.nightId, list);
   }
   return byNight;
@@ -134,17 +191,6 @@ async function selectNight(db: Db, id: number): Promise<NightResponse | undefine
   const matchList = (await fetchMatchesFor(db, [id])).get(id);
   if (matchList) night.matches = matchList;
   return night;
-}
-
-/** Case-insensitive upsert-by-name, mirroring the original MERGE statement. */
-async function upsertDeck(db: Db, name: string, type: string): Promise<number> {
-  const existing = await db.select({ id: decks.id }).from(decks).where(sql`LOWER(${decks.name}) = LOWER(${name})`);
-  if (existing[0]) {
-    await db.update(decks).set({ energyType: type }).where(eq(decks.id, existing[0].id));
-    return existing[0].id;
-  }
-  const inserted = await db.insert(decks).output({ id: decks.id }).values({ name, energyType: type });
-  return inserted[0].id;
 }
 
 /** Look up a night's owner userId (via the users FK), for the ownership check. */
@@ -225,6 +271,9 @@ app.http('nights', {
       // quick mode uses the raw fields and clears any prior match log so the
       // two can never drift apart.
       const totals = input.matches ? deriveTotals(input.matches) : { w: input.w, t: input.t, l: input.l };
+      // Opponent decks are upserted up front (outside the transaction, same as
+      // the player's own deck above) so writeMatches can insert plain ids.
+      const resolvedMatches = input.matches ? await resolveMatchOpponents(db, input.matches) : undefined;
 
       if (request.method === 'POST') {
         const ownerId = await ensureUser(db, user.userId, user.userDetails);
@@ -242,7 +291,7 @@ app.http('nights', {
               ownerId
             });
           const id = inserted[0].id;
-          if (input.matches) await writeMatches(tx, id, input.matches);
+          if (resolvedMatches) await writeMatches(tx, id, resolvedMatches);
           return id;
         });
         return { status: 201, jsonBody: await selectNight(db, newId) };
@@ -261,7 +310,7 @@ app.http('nights', {
           .update(nights)
           .set({ playedOn: input.date, deckId, wins: totals.w, ties: totals.t, losses: totals.l, notes: input.notes })
           .where(eq(nights.id, id));
-        await writeMatches(tx, id, input.matches ?? []);
+        await writeMatches(tx, id, resolvedMatches ?? []);
       });
       return { jsonBody: await selectNight(db, id) };
     } catch (err) {

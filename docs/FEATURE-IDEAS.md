@@ -344,6 +344,8 @@ maybe not "unbeaten" streaks (track both, label precisely).
 
 ### 11. Energy-type performance breakdown
 
+> **Status: implemented in PR #34**
+
 **What.** Aggregate results by the deck's energy type: a per-type record/PPG bar
 list or small multiples, colored with the existing type palette.
 

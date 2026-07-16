@@ -383,6 +383,8 @@ arithmetic around midnight will shift days for users in other timezones.
 
 ### 13. Rolling form indicators
 
+> **Status: implemented in PR #35**
+
 **What.** "Form" chips: last-5-nights PPG next to the season PPG on the
 Scoreboard (with an up/down arrow vs season average), and a tiny sparkline per
 deck row in `DeckTable`.

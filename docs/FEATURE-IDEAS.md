@@ -612,6 +612,8 @@ delete anything.
 
 ### 23. Dark mode
 
+> **Status: implemented in PR #33**
+
 **What.** Honor `prefers-color-scheme: dark` with a manual three-way override
 (auto/light/dark) persisted in `localStorage`, toggled from the top bar.
 

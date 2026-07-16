@@ -72,6 +72,9 @@ export const matches = mssqlTable('matches', {
   roundNo: int('round_no').notNull(),
   // 'W' | 'T' | 'L'
   result: nvarchar({ length: 1 }).notNull(),
+  // Optional: what the opponent was playing, reusing the same decks registry
+  // as the player's own deck. Null when not recorded.
+  opponentDeckId: int('opponent_deck_id').references(() => decks.id),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

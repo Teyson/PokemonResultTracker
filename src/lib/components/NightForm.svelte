@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Night, NightInput } from '$lib/types';
-  import { TYPES, colorOf, recentTuesday } from '$lib/pokemon';
-  import TypeIcon from './TypeIcon.svelte';
+  import { recentTuesday } from '$lib/pokemon';
+  import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
 
   let {
     nights,
@@ -15,16 +15,18 @@
     onCancel: () => void;
   } = $props();
 
-  interface DeckOption {
-    name: string;
-    type: string;
-  }
-
+  // Includes both decks the player has logged and decks seen only as an
+  // opponent, so the opponent picker on a match row offers the same registry.
   function deckRegistry(): DeckOption[] {
     const map = new Map<string, DeckOption>();
     for (const n of nights) {
       const k = n.deck.trim().toLowerCase();
       if (!map.has(k)) map.set(k, { name: n.deck, type: n.type });
+      for (const m of n.matches ?? []) {
+        if (!m.opponentDeck) continue;
+        const ok = m.opponentDeck.trim().toLowerCase();
+        if (!map.has(ok)) map.set(ok, { name: m.opponentDeck, type: m.opponentType ?? 'Colorless' });
+      }
     }
     return [...map.values()];
   }
@@ -33,6 +35,26 @@
 
   type MatchResult = 'W' | 'T' | 'L';
   const MATCH_RESULTS: MatchResult[] = ['W', 'T', 'L'];
+
+  interface MatchRow {
+    result: MatchResult;
+    opponentOpen: boolean;
+    opponentName: string;
+    opponentIsNew: boolean;
+    opponentNewName: string;
+    opponentType: string;
+  }
+
+  function emptyMatchRow(): MatchRow {
+    return {
+      result: 'W',
+      opponentOpen: false,
+      opponentName: '',
+      opponentIsNew: false,
+      opponentNewName: '',
+      opponentType: 'Colorless'
+    };
+  }
 
   let date = $state(recentTuesday());
   let deck = $state('');
@@ -43,7 +65,7 @@
   let t = $state(0);
   let l = $state(0);
   let detailed = $state(true);
-  let matchResults = $state<MatchResult[]>([]);
+  let matchRows = $state<MatchRow[]>([]);
   let saving = $state(false);
 
   $effect(() => {
@@ -57,7 +79,15 @@
       t = editing.t;
       l = editing.l;
       detailed = (editing.matches?.length ?? 0) > 0;
-      matchResults = editing.matches?.map((m) => m.result) ?? [];
+      matchRows =
+        editing.matches?.map((m) => ({
+          result: m.result,
+          opponentOpen: !!m.opponentDeck,
+          opponentName: m.opponentDeck ?? '',
+          opponentIsNew: false,
+          opponentNewName: '',
+          opponentType: m.opponentType ?? 'Colorless'
+        })) ?? [];
     } else {
       const opts = deckRegistry();
       date = recentTuesday();
@@ -69,22 +99,49 @@
       t = 0;
       l = 0;
       detailed = true;
-      matchResults = [];
+      matchRows = [];
     }
   });
 
   function toggleDetailed() {
     detailed = !detailed;
-    if (detailed && matchResults.length === 0) matchResults = [];
   }
   function addMatch() {
-    matchResults = [...matchResults, 'W'];
+    matchRows = [...matchRows, emptyMatchRow()];
   }
   function setMatchResult(i: number, result: MatchResult) {
-    matchResults = matchResults.map((r, idx) => (idx === i ? result : r));
+    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, result } : r));
   }
   function removeMatch(i: number) {
-    matchResults = matchResults.filter((_, idx) => idx !== i);
+    matchRows = matchRows.filter((_, idx) => idx !== i);
+  }
+  function toggleOpponent(i: number) {
+    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, opponentOpen: !r.opponentOpen } : r));
+  }
+  function selectOpponent(i: number, d: DeckOption) {
+    matchRows = matchRows.map((r, idx) =>
+      idx === i ? { ...r, opponentIsNew: false, opponentName: d.name, opponentType: d.type } : r
+    );
+  }
+  function selectOpponentNew(i: number) {
+    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, opponentIsNew: true, opponentName: '' } : r));
+  }
+  function clearOpponent(i: number) {
+    matchRows = matchRows.map((r, idx) =>
+      idx === i
+        ? { ...r, opponentOpen: false, opponentIsNew: false, opponentName: '', opponentNewName: '' }
+        : r
+    );
+  }
+  function setOpponentNewName(i: number, v: string) {
+    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, opponentNewName: v } : r));
+  }
+  function setOpponentType(i: number, t: string) {
+    matchRows = matchRows.map((r, idx) => (idx === i ? { ...r, opponentType: t } : r));
+  }
+  function opponentLabel(r: MatchRow): string {
+    const name = r.opponentIsNew ? r.opponentNewName : r.opponentName;
+    return name ? `vs ${name} ✎` : '+ opponent';
   }
 
   function selectDeck(d: DeckOption) {
@@ -102,12 +159,25 @@
     else l = Math.max(0, l + delta);
   }
 
+  function resolveOpponent(r: MatchRow): { opponentDeck: string; opponentType: string } | Record<string, never> {
+    const name = (r.opponentIsNew ? r.opponentNewName : r.opponentName).trim();
+    return name ? { opponentDeck: name, opponentType: r.opponentType } : {};
+  }
+
   async function save() {
     const finalDeck = (newDeck ? newDeckName.trim() : deck) || 'Untitled deck';
     saving = true;
     try {
       const input = detailed
-        ? { date: date || recentTuesday(), deck: finalDeck, type, w, t, l, matches: matchResults.map((result) => ({ result })) }
+        ? {
+            date: date || recentTuesday(),
+            deck: finalDeck,
+            type,
+            w,
+            t,
+            l,
+            matches: matchRows.map((r) => ({ result: r.result, ...resolveOpponent(r) }))
+          }
         : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l };
       await onSave(input, editing?.id ?? null);
     } finally {
@@ -122,51 +192,19 @@
     <div class="field"><label for="fDate">Date</label><input id="fDate" type="date" bind:value={date} /></div>
   </div>
 
-  <div class="field" style="margin-bottom:13px;">
-    <span class="field-label" id="deckLabel">Deck</span>
-    <div class="deckchips" role="group" aria-labelledby="deckLabel">
-      {#each decks as d (d.name)}
-        <button
-          type="button"
-          class="dchip"
-          aria-pressed={!newDeck && deck === d.name}
-          onclick={() => selectDeck(d)}
-        >
-          <TypeIcon type={d.type} size={16} />{d.name}
-        </button>
-      {/each}
-      <button type="button" class="dchip new" aria-pressed={newDeck} onclick={selectNewDeck}>+ New deck</button>
-    </div>
-    {#if newDeck}
-      <input
-        type="text"
-        placeholder="New deck name"
-        autocomplete="off"
-        style="margin-top:9px;"
-        bind:value={newDeckName}
-      />
-    {/if}
-  </div>
-
-  {#if newDeck}
-    <div class="field" style="margin-bottom:13px;">
-      <span class="field-label" id="typeLabel">Type</span>
-      <div class="swatches" role="group" aria-labelledby="typeLabel">
-        {#each TYPES as [name] (name)}
-          <button
-            type="button"
-            class="sw"
-            style="color:{colorOf(name)}"
-            aria-pressed={type === name}
-            title={name}
-            onclick={() => (type = name)}
-          >
-            <TypeIcon type={name} size={26} />
-          </button>
-        {/each}
-      </div>
-    </div>
-  {/if}
+  <DeckPicker
+    {decks}
+    label="Deck"
+    idPrefix="deck"
+    selectedName={deck}
+    isNew={newDeck}
+    newName={newDeckName}
+    {type}
+    onSelect={selectDeck}
+    onSelectNew={selectNewDeck}
+    onNewNameInput={(v) => (newDeckName = v)}
+    onTypeSelect={(t) => (type = t)}
+  />
 
   <div class="mode-row">
     <span class="field-label">{detailed ? 'Per-match log' : 'Quick record'}</span>
@@ -177,7 +215,7 @@
 
   {#if detailed}
     <div class="matches">
-      {#each matchResults as result, i (i)}
+      {#each matchRows as row, i (i)}
         <div class="matchrow">
           <span class="rn">R{i + 1}</span>
           <div class="seg" role="group" aria-label="Match {i + 1} result">
@@ -185,15 +223,40 @@
               <button
                 type="button"
                 class="segbtn {r.toLowerCase()}"
-                aria-pressed={result === r}
+                aria-pressed={row.result === r}
                 onclick={() => setMatchResult(i, r)}>{r}</button
               >
             {/each}
           </div>
+          <button
+            type="button"
+            class="oppbtn"
+            aria-expanded={row.opponentOpen}
+            onclick={() => toggleOpponent(i)}>{opponentLabel(row)}</button
+          >
           <button type="button" class="rmbtn" aria-label="Remove match {i + 1}" onclick={() => removeMatch(i)}
             >✕</button
           >
         </div>
+        {#if row.opponentOpen}
+          <div class="opponent">
+            <DeckPicker
+              {decks}
+              label="Opponent's deck (optional)"
+              idPrefix="match{i}opp"
+              selectedName={row.opponentName}
+              isNew={row.opponentIsNew}
+              newName={row.opponentNewName}
+              type={row.opponentType}
+              clearable
+              onSelect={(d) => selectOpponent(i, d)}
+              onSelectNew={() => selectOpponentNew(i)}
+              onClear={() => clearOpponent(i)}
+              onNewNameInput={(v) => setOpponentNewName(i, v)}
+              onTypeSelect={(t) => setOpponentType(i, t)}
+            />
+          </div>
+        {/if}
       {/each}
       <button type="button" class="addmatch" onclick={addMatch}>+ Add match</button>
     </div>
@@ -272,80 +335,6 @@
     text-transform: uppercase;
     color: var(--muted);
     margin-bottom: 6px;
-  }
-  .swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
-  .sw {
-    width: 26px;
-    height: 26px;
-    box-sizing: content-box;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.08s;
-    padding: 0;
-    background: none;
-  }
-  .sw:active {
-    transform: scale(0.9);
-  }
-  .sw:focus-visible {
-    outline: 2px solid var(--text);
-    outline-offset: 2px;
-  }
-  .sw[aria-pressed='true'] {
-    border-color: var(--text);
-    box-shadow:
-      0 0 0 2px var(--ink),
-      0 0 0 4px currentColor;
-  }
-  .deckchips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
-  .dchip {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    background: var(--ink);
-    border: 1px solid var(--line);
-    color: var(--text);
-    border-radius: 22px;
-    padding: 9px 14px;
-    font-size: 13.5px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: transform 0.07s;
-  }
-  .dchip:active {
-    transform: scale(0.96);
-  }
-  .dchip:focus-visible {
-    outline: 2px solid var(--red);
-    outline-offset: 2px;
-  }
-  .dchip[aria-pressed='true'] {
-    border-color: var(--red);
-    background: rgba(239, 47, 66, 0.13);
-    box-shadow: 0 0 0 2px rgba(239, 47, 66, 0.2);
-  }
-  .dchip.new {
-    border-style: dashed;
-    color: var(--muted);
-  }
-  .dchip.new[aria-pressed='true'] {
-    border-color: var(--gold);
-    color: var(--gold);
-    background: rgba(246, 201, 69, 0.1);
-    box-shadow: none;
   }
   .mode-row {
     display: flex;
@@ -434,6 +423,32 @@
   .rmbtn:focus-visible {
     outline: 2px solid var(--text);
     outline-offset: 2px;
+  }
+  .oppbtn {
+    flex: 0 0 auto;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 7px;
+    border: 1px dashed var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 7px 9px;
+    font-family: inherit;
+  }
+  .oppbtn[aria-expanded='true'] {
+    border-style: solid;
+    color: var(--text);
+  }
+  .oppbtn:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .opponent {
+    margin: -2px 0 11px 33px;
   }
   .addmatch {
     width: 100%;

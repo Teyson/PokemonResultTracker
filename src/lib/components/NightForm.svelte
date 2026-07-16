@@ -2,6 +2,7 @@
   import type { Night, NightInput, DeckSummary } from '$lib/types';
   import { recentTuesday } from '$lib/pokemon';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
+  import { slide } from 'svelte/transition';
 
   let {
     nights,
@@ -296,7 +297,7 @@
           >
         </div>
         {#if row.opponentOpen}
-          <div class="opponent">
+          <div class="opponent" transition:slide={{ duration: 180 }}>
             <DeckPicker
               decks={opponentDecks}
               searchable

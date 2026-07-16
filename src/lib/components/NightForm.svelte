@@ -2,6 +2,7 @@
   import type { Night, NightInput, DeckSummary } from '$lib/types';
   import { recentTuesday } from '$lib/pokemon';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
+  import { slide } from 'svelte/transition';
 
   let {
     nights,
@@ -155,7 +156,9 @@
   }
   function selectOpponent(i: number, d: DeckOption) {
     matchRows = matchRows.map((r, idx) =>
-      idx === i ? { ...r, opponentIsNew: false, opponentName: d.name, opponentDeckId: d.id, opponentType: d.type } : r
+      idx === i
+        ? { ...r, opponentOpen: false, opponentIsNew: false, opponentName: d.name, opponentDeckId: d.id, opponentType: d.type }
+        : r
     );
   }
   function selectOpponentNew(i: number) {
@@ -260,7 +263,7 @@
   {#if detailed}
     <div class="matches">
       {#each matchRows as row, i (i)}
-        <div class="matchrow">
+        <div class="matchrow" transition:slide={{ duration: 220 }}>
           <span class="rn">R{i + 1}</span>
           <div class="seg" role="group" aria-label="Match {i + 1} result">
             {#each MATCH_RESULTS as r (r)}
@@ -294,7 +297,7 @@
           >
         </div>
         {#if row.opponentOpen}
-          <div class="opponent">
+          <div class="opponent" transition:slide={{ duration: 320 }}>
             <DeckPicker
               decks={opponentDecks}
               searchable

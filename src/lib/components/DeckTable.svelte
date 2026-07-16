@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
   import { colorOf, ppg } from '$lib/pokemon';
+  import { slide } from 'svelte/transition';
 
   let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
@@ -95,7 +96,7 @@
         >
       </div>
       {#if expanded.has(d.key)}
-        <div class="turnrow">
+        <div class="turnrow" transition:slide={{ duration: 220 }}>
           {#if hasTurnOrder}
             <div class="to-cell">
               <div class="to-lab">Going first</div>

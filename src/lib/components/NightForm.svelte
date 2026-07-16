@@ -297,7 +297,7 @@
           >
         </div>
         {#if row.opponentOpen}
-          <div class="opponent" transition:slide={{ duration: 180 }}>
+          <div class="opponent" transition:slide={{ duration: 320 }}>
             <DeckPicker
               decks={opponentDecks}
               searchable

@@ -1,24 +1,13 @@
-export const toastState = $state<{
-  message: string;
-  visible: boolean;
-  isError: boolean;
-  action: { label: string; onClick: () => void } | null;
-}>({ message: '', visible: false, isError: false, action: null });
+export const toastState = $state({ message: '', visible: false, isError: false });
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-export function toast(
-  message: string,
-  isError = false,
-  opts: { action?: { label: string; onClick: () => void }; duration?: number } = {}
-) {
+export function toast(message: string, isError = false) {
   toastState.message = message;
   toastState.isError = isError;
-  toastState.action = opts.action ?? null;
   toastState.visible = true;
   clearTimeout(timer);
   timer = setTimeout(() => {
     toastState.visible = false;
-    toastState.action = null;
-  }, opts.duration ?? 2600);
+  }, 2600);
 }

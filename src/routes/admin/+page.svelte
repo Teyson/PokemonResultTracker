@@ -3,7 +3,7 @@
   import type { ClientPrincipal, AllowedUser, UsersResponse, Night } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { fmtDate } from '$lib/pokemon';
+  import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
@@ -18,6 +18,10 @@
 
   let deletedNights = $state<Night[]>([]);
   let deletedLoaded = $state(false);
+  let deletedSearch = $state('');
+
+  type DeletedSortKey = 'deck' | 'owner' | 'date' | 'record' | 'deletedAt';
+  let deletedSort = $state<{ key: DeletedSortKey; dir: 1 | -1 }>({ key: 'deletedAt', dir: -1 });
 
   $effect(() => {
     if (isAdmin && !loaded) reload();
@@ -42,6 +46,35 @@
       toast((e as Error).message, true);
     }
   }
+
+  function toggleDeletedSort(key: DeletedSortKey) {
+    deletedSort = deletedSort.key === key ? { key, dir: deletedSort.dir === 1 ? -1 : 1 } : { key, dir: 1 };
+  }
+
+  function deletedSortArrow(key: DeletedSortKey): string {
+    if (deletedSort.key !== key) return '';
+    return deletedSort.dir === 1 ? ' ▲' : ' ▼';
+  }
+
+  // All client-side: the deleted-nights list is unbounded (no time cutoff, no
+  // pagination), but that's fine at this league's scale.
+  let filteredDeletedNights = $derived.by(() => {
+    const q = deletedSearch.trim().toLowerCase();
+    const rows = q
+      ? deletedNights.filter((n) => n.deck.toLowerCase().includes(q) || n.createdBy.toLowerCase().includes(q))
+      : deletedNights.slice();
+    const { key, dir } = deletedSort;
+    rows.sort((a, b) => {
+      let cmp = 0;
+      if (key === 'deck') cmp = a.deck.localeCompare(b.deck);
+      else if (key === 'owner') cmp = a.createdBy.localeCompare(b.createdBy);
+      else if (key === 'date') cmp = a.date.localeCompare(b.date);
+      else if (key === 'record') cmp = ppg(a) - ppg(b);
+      else cmp = (a.deletedAt ?? '').localeCompare(b.deletedAt ?? '');
+      return cmp * dir;
+    });
+    return rows;
+  });
 
   async function reload() {
     try {
@@ -162,24 +195,48 @@
         {/each}
       {/if}
 
-      <div class="section-title">Recently deleted nights</div>
+      <div class="section-title">Deleted nights</div>
 
       {#if deletedNights.length === 0}
-        <div class="empty">Nothing deleted recently.</div>
+        <div class="empty">No deleted nights.</div>
       {:else}
-        {#each deletedNights as n (n.id)}
-          <div class="urow">
-            <div class="who">
-              <div class="login">{n.deck} — {n.w}-{n.t}-{n.l}</div>
-              <div class="meta">
-                {n.createdBy} · {fmtDate(n.date)} · deleted {n.deletedAt ? new Date(n.deletedAt).toLocaleString() : ''}
-              </div>
+        <input
+          type="text"
+          class="search"
+          placeholder="Search by deck or player…"
+          autocomplete="off"
+          spellcheck="false"
+          bind:value={deletedSearch}
+        />
+        <div class="dtable-scroll">
+          <div class="dtable">
+            <div class="drow head">
+              <button type="button" onclick={() => toggleDeletedSort('deck')}>Deck{deletedSortArrow('deck')}</button>
+              <button type="button" onclick={() => toggleDeletedSort('owner')}>Player{deletedSortArrow('owner')}</button>
+              <button type="button" onclick={() => toggleDeletedSort('date')}>Played{deletedSortArrow('date')}</button>
+              <button type="button" onclick={() => toggleDeletedSort('record')}>Record{deletedSortArrow('record')}</button>
+              <button type="button" onclick={() => toggleDeletedSort('deletedAt')}
+                >Deleted{deletedSortArrow('deletedAt')}</button
+              >
+              <span></span>
             </div>
-            <button class="restore" title="Restore" aria-label={`Restore ${n.deck}`} onclick={() => restoreNight(n)}
-              >Restore</button
-            >
+            {#each filteredDeletedNights as n (n.id)}
+              <div class="drow">
+                <span class="cell-deck">{n.deck}</span>
+                <span>{n.createdBy}</span>
+                <span>{fmtDate(n.date)}</span>
+                <span class="mono">{n.w}-{n.t}-{n.l}</span>
+                <span class="cell-deleted">{n.deletedAt ? new Date(n.deletedAt).toLocaleString() : ''}</span>
+                <button class="restore" title="Restore" aria-label={`Restore ${n.deck}`} onclick={() => restoreNight(n)}
+                  >Restore</button
+                >
+              </div>
+            {/each}
+            {#if filteredDeletedNights.length === 0}
+              <div class="noresults">No deleted nights match "{deletedSearch}".</div>
+            {/if}
           </div>
-        {/each}
+        </div>
       {/if}
     </div>
   {/if}
@@ -367,22 +424,102 @@
     outline: 2px solid var(--text);
     outline-offset: 2px;
   }
-  .urow .restore {
+  .search {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--ink);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    margin-bottom: 10px;
+  }
+  .search::placeholder {
+    color: #565b74;
+  }
+  .search:focus {
+    outline: none;
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px rgba(239, 47, 66, 0.16);
+  }
+  .dtable-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .dtable {
+    min-width: 690px;
+  }
+  .drow {
+    display: grid;
+    grid-template-columns: 140px 110px 90px 80px 150px 70px;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .drow:last-child {
+    border-bottom: none;
+  }
+  .drow.head {
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .drow.head button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 0;
+    cursor: pointer;
+  }
+  .drow.head button:hover {
+    color: var(--text);
+  }
+  .cell-deck {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cell-deleted {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .mono {
+    font-variant-numeric: tabular-nums;
+  }
+  .noresults {
+    color: var(--muted);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 16px;
+  }
+  .restore {
     flex: 0 0 auto;
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 7px 12px;
+    padding: 6px 10px;
     background: transparent;
     color: var(--gold);
     cursor: pointer;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
+    justify-self: start;
   }
-  .urow .restore:active {
+  .restore:active {
     background: var(--panel2);
   }
-  .urow .restore:focus-visible {
+  .restore:focus-visible {
     outline: 2px solid var(--text);
     outline-offset: 2px;
   }

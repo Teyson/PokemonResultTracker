@@ -438,6 +438,8 @@ whereas idea 8 is the season-long race.
 
 ### 16. Deck management page
 
+> **Status: implemented in PR #TBD**
+
 **What.** A `/decks` admin view listing every deck in the registry with rename,
 change-energy-type, **merge into another deck** (repoints nights, deletes the
 duplicate), and delete-if-unused.

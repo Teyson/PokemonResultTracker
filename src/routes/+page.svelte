@@ -129,7 +129,8 @@
           {/if}
           <span>{auth.principal.userDetails}</span>
         </span>
-        {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>{/if}
+        {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>
+          <a class="tlink admin" href="/decks">Manage decks</a>{/if}
         <a class="tlink" href="/logout">Sign out</a>
       </div>
 

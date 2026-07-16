@@ -6,6 +6,7 @@
     { "route": "/login", "redirect": "/.auth/login/github" },
     { "route": "/logout", "redirect": "/.auth/logout" },
     { "route": "/admin", "rewrite": "/admin.html" },
+    { "route": "/decks", "rewrite": "/decks.html" },
     { "route": "/api/nights*", "allowedRoles": ["authenticated"] },
     { "route": "/api/users*", "allowedRoles": ["authenticated"] },
     { "route": "/api/me", "allowedRoles": ["authenticated"] }

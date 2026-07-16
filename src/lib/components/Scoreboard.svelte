@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { ppg } from '$lib/pokemon';
+  import { ppg, rollingPpg } from '$lib/pokemon';
   import TrendChart from './TrendChart.svelte';
 
   let { nights }: { nights: Night[] } = $props();
@@ -10,7 +10,12 @@
   );
   let g = $derived(totals.w + totals.t + totals.l);
   let P = $derived(totals.w * 3 + totals.t);
-  let avgPpg = $derived(g ? (P / g).toFixed(2) : '—');
+  let seasonPpg = $derived(g ? P / g : 0);
+  let avgPpg = $derived(g ? seasonPpg.toFixed(2) : '—');
+
+  const FORM_WINDOW = 5;
+  let formPpg = $derived(nights.length >= FORM_WINDOW ? rollingPpg(nights, FORM_WINDOW) : null);
+  let formDelta = $derived(formPpg !== null ? formPpg - seasonPpg : 0);
 
   /** Splits every match with a recorded turn order into going-first / going-second W/T/L totals. */
   function turnOrderTotals(list: Night[]): { first: { w: number; t: number; l: number }; second: { w: number; t: number; l: number } } {
@@ -56,6 +61,21 @@
         <div class="to-lab">Going second</div>
         <div class="to-rec">{turnOrder.second.w}–{turnOrder.second.t}–{turnOrder.second.l}</div>
         <div class="to-ppg">{secondGames ? ppg(turnOrder.second).toFixed(2) : '—'} <span>ppg</span></div>
+      </div>
+    </div>
+  {/if}
+  {#if formPpg !== null}
+    <div class="form">
+      <div class="form-lab">Last {FORM_WINDOW} nights</div>
+      <div class="form-val">
+        {formPpg.toFixed(2)} <span>ppg</span>
+        {#if Math.abs(formDelta) >= 0.01}
+          <span class="arrow" class:up={formDelta > 0} class:down={formDelta < 0}
+            >{formDelta > 0 ? '▲' : '▼'} {Math.abs(formDelta).toFixed(2)} vs season</span
+          >
+        {:else}
+          <span class="arrow flat">on pace with season</span>
+        {/if}
       </div>
     </div>
   {/if}
@@ -196,5 +216,57 @@
     font-size: 9px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+  }
+  .form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 9px 12px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    position: relative;
+  }
+  .form-lab {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .form-val {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .form-val > span:first-of-type {
+    font-family: inherit;
+    font-weight: 400;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .arrow {
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+  .arrow.up {
+    color: var(--win-text);
+  }
+  .arrow.down {
+    color: var(--loss-text);
+  }
+  .arrow.flat {
+    color: var(--muted);
+    font-weight: 400;
   }
 </style>

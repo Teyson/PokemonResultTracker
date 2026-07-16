@@ -31,6 +31,27 @@ export function ppg(n: Pick<Night, 'w' | 't' | 'l'>): number {
   return g ? pts(n) / g : 0;
 }
 
+function sortedByDate(nights: Night[]): Night[] {
+  return [...nights].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id.localeCompare(b.id)));
+}
+
+/** Combined PPG over the most recent n nights (chronological) — "current form" vs the season average. */
+export function rollingPpg(nights: Night[], n: number): number {
+  const recent = sortedByDate(nights).slice(-n);
+  return ppg({
+    w: recent.reduce((sum, x) => sum + x.w, 0),
+    t: recent.reduce((sum, x) => sum + x.t, 0),
+    l: recent.reduce((sum, x) => sum + x.l, 0)
+  });
+}
+
+/** Each of the most recent n nights' own PPG, oldest to newest — for sparklines. */
+export function nightlyPpgSeries(nights: Night[], n: number): number[] {
+  return sortedByDate(nights)
+    .slice(-n)
+    .map((x) => ppg(x));
+}
+
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }

@@ -835,6 +835,11 @@ result when set.
 
 ### 30. Admin audit log
 
+> **Status: implemented.** Scoped to the What section's exact list: member
+> add/remove, an admin editing/deleting a night they don't own, and deck
+> rename/merge. Deck delete and idea 22's import (not yet built) aren't
+> logged — pick those up if/when they land.
+
 **What.** Record every admin/mutating action (member added/removed, night
 edited/deleted by an admin who isn't the owner, deck merge/rename, import) into
 an `audit_log` table, viewable on `/admin`.

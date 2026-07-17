@@ -74,6 +74,15 @@ export interface LeaderboardEntry {
   l: number;
 }
 
+/** One admin/mutating action recorded to the audit trail. */
+export interface AuditLogEntry {
+  id: string;
+  actorLogin: string | null;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface ClientPrincipal {
   userId: string;
   userDetails: string;

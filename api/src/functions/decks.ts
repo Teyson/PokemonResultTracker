@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
+import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { DeckSummaryResponse } from '../types';
 
@@ -159,6 +160,9 @@ app.http('decks', {
           };
         }
         await db.update(decks).set({ name: parsed.data.name, energyType: parsed.data.type }).where(eq(decks.id, id));
+        if (existing.name !== parsed.data.name) {
+          await logAudit(db, user, 'deck.rename', `Renamed "${existing.name}" to "${parsed.data.name}"`, context);
+        }
         const rows = await db
           .select({ id: decks.id, name: decks.name, type: decks.energyType, ownerLogin: users.githubLogin })
           .from(decks)
@@ -196,6 +200,7 @@ app.http('decks', {
           await tx.update(matches).set({ opponentDeckId: targetId }).where(eq(matches.opponentDeckId, id));
           await tx.delete(decks).where(eq(decks.id, id));
         });
+        await logAudit(db, user, 'deck.merge', `Merged "${source.name}" into "${target.name}"`, context);
         return { status: 204 };
       }
 

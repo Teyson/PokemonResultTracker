@@ -6,6 +6,7 @@ import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { upsertOwnedDeck, upsertOpponentDeck } from '../db/decks';
 import { ensureUser } from '../db/userDirectory';
+import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { MatchResponse, NightResponse } from '../types';
 
@@ -236,12 +237,20 @@ async function selectNight(db: Db, id: number): Promise<NightResponse | undefine
   return night;
 }
 
-/** Look up a night's owner userId (via the users FK) and delete-state, for ownership/visibility checks. */
-async function nightOwnerState(db: Db, id: number): Promise<{ ownerUserId: string; deletedAt: Date | null } | undefined> {
+/**
+ * Look up a night's owner (userId + login, via the users FK), deck name, date
+ * and delete-state — for ownership/visibility checks and, when an admin acts
+ * on someone else's night, the audit log detail string.
+ */
+async function nightOwnerState(
+  db: Db,
+  id: number
+): Promise<{ ownerUserId: string; ownerLogin: string; deck: string; date: string; deletedAt: Date | null } | undefined> {
   const rows = await db
-    .select({ ownerUserId: users.userId, deletedAt: nights.deletedAt })
+    .select({ ownerUserId: users.userId, ownerLogin: users.githubLogin, deck: decks.name, date: nights.playedOn, deletedAt: nights.deletedAt })
     .from(nights)
     .innerJoin(users, eq(users.id, nights.ownerId))
+    .innerJoin(decks, eq(decks.id, nights.deckId))
     .where(eq(nights.id, id));
   return rows[0];
 }
@@ -311,6 +320,9 @@ app.http('nights', {
           return { status: 403, jsonBody: { error: 'You can only delete your own nights.' } };
         }
         await db.update(nights).set({ deletedAt: new Date() }).where(eq(nights.id, id));
+        if (isAdmin && state.ownerUserId !== user.userId) {
+          await logAudit(db, user, 'night.delete.admin', `Deleted ${state.ownerLogin}'s ${state.deck} night from ${state.date}`, context);
+        }
         return { status: 204 };
       }
 
@@ -394,6 +406,9 @@ app.http('nights', {
           .where(eq(nights.id, id));
         await writeMatches(tx, id, resolvedMatches ?? []);
       });
+      if (isAdmin && state.ownerUserId !== user.userId) {
+        await logAudit(db, user, 'night.edit.admin', `Edited ${state.ownerLogin}'s ${state.deck} night from ${state.date}`, context);
+      }
       return { jsonBody: await selectNight(db, id) };
     } catch (err) {
       context.error('nights handler failed', err);

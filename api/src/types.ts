@@ -56,3 +56,12 @@ export interface LeaderboardEntryResponse {
   t: number;
   l: number;
 }
+
+/** One admin/mutating action recorded to the audit trail. */
+export interface AuditLogEntryResponse {
+  id: string;
+  actorLogin: string | null;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}

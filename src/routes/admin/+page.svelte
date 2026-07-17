@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, AllowedUser, UsersResponse, Night } from '$lib/types';
+  import type { ClientPrincipal, AllowedUser, UsersResponse, Night, AuditLogEntry } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
@@ -24,10 +24,23 @@
   type DeletedSortKey = 'deck' | 'owner' | 'date' | 'record' | 'deletedAt';
   let deletedSort = $state<{ key: DeletedSortKey; dir: 1 | -1 }>({ key: 'deletedAt', dir: -1 });
 
+  let auditEntries = $state<AuditLogEntry[]>([]);
+  let auditLoaded = $state(false);
+
   $effect(() => {
     if (isAdmin && !loaded) reload();
     if (isAdmin && !deletedLoaded) reloadDeleted();
+    if (isAdmin && !auditLoaded) reloadAudit();
   });
+
+  async function reloadAudit() {
+    try {
+      auditEntries = (await api<AuditLogEntry[]>('/api/audit?limit=100')) ?? [];
+      auditLoaded = true;
+    } catch (e) {
+      toast(`Could not load admin activity: ${(e as Error).message}`, true);
+    }
+  }
 
   async function reloadDeleted() {
     try {
@@ -98,6 +111,7 @@
       await api('/api/users', { method: 'POST', body: JSON.stringify({ github_login: login }) });
       loginInput = '';
       await reload();
+      await reloadAudit();
       toast(`Added ${login}`);
     } catch (e) {
       toast((e as Error).message, true);
@@ -111,6 +125,7 @@
     try {
       await api(`/api/users/${encodeURIComponent(u.id)}`, { method: 'DELETE' });
       await reload();
+      await reloadAudit();
       toast(`Removed ${u.github_login}`);
     } catch (e) {
       toast((e as Error).message, true);
@@ -235,6 +250,29 @@
             {#if filteredDeletedNights.length === 0}
               <div class="noresults">No deleted nights match "{deletedSearch}".</div>
             {/if}
+          </div>
+        </div>
+      {/if}
+
+      <div class="section-title">Admin activity</div>
+
+      {#if auditEntries.length === 0}
+        <div class="empty">No admin activity recorded yet.</div>
+      {:else}
+        <div class="dtable-scroll">
+          <div class="dtable audit">
+            <div class="drow head audit">
+              <span>When</span>
+              <span>Who</span>
+              <span>What</span>
+            </div>
+            {#each auditEntries as entry (entry.id)}
+              <div class="drow audit">
+                <span class="cell-deleted">{new Date(entry.createdAt).toLocaleString()}</span>
+                <span>{entry.actorLogin ?? '—'}</span>
+                <span>{entry.detail ?? entry.action}</span>
+              </div>
+            {/each}
           </div>
         </div>
       {/if}
@@ -442,6 +480,9 @@
   .dtable {
     min-width: 690px;
   }
+  .dtable.audit {
+    min-width: 480px;
+  }
   .drow {
     display: grid;
     grid-template-columns: 140px 110px 90px 80px 150px 70px;
@@ -450,6 +491,9 @@
     padding: 10px 13px;
     border-bottom: 1px solid var(--line);
     font-size: 12.5px;
+  }
+  .drow.audit {
+    grid-template-columns: 150px 110px 1fr;
   }
   .drow:last-child {
     border-bottom: none;

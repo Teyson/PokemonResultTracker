@@ -104,6 +104,27 @@ export const matches = mssqlTable('matches', {
 });
 
 /**
+ * Trail of admin/mutating actions worth being able to answer "who did that,
+ * and when" about — member add/remove, an admin editing/deleting someone
+ * else's night, deck merge/rename. actorLogin is a denormalized copy of the
+ * GitHub login at the time of the action (not a users FK) so the log still
+ * reads correctly after a rename or removal. detail is a short human-readable
+ * summary string, not structured data — this is a log, not a data source, and
+ * it deliberately never holds note contents or anything a member might
+ * consider private.
+ */
+export const auditLog = mssqlTable('audit_log', {
+  id: int().primaryKey().identity(),
+  actorUserId: nvarchar('actor_user_id', { length: 200 }).notNull(),
+  actorLogin: nvarchar('actor_login', { length: 100 }),
+  action: nvarchar({ length: 50 }).notNull(),
+  detail: nvarchar({ length: 500 }),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
  * Access policy / invite whitelist, managed by the admin from /admin. Invites
  * are created by GitHub login (the only handle known before someone first signs
  * in) and bound to the immutable userId on first login, so access survives a

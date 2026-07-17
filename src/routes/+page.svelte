@@ -27,6 +27,7 @@
   let decks = $state<DeckSummary[]>([]);
   let editing = $state<Night | null>(null);
   let viewScope = $state<'mine' | 'all'>('mine');
+  let nightsOpen = $state(false);
 
   $effect(() => {
     if (isMember && !nightsLoaded) {
@@ -148,8 +149,6 @@
 
       <Scoreboard {nights} />
       <Records {nights} />
-      <Badges {nights} />
-      <CalendarHeatmap {nights} />
       <NightForm
         {nights}
         {decks}
@@ -159,18 +158,31 @@
         onCancel={() => (editing = null)}
       />
 
-      <div class="section-title">
+      <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+
+      <CalendarHeatmap {nights} />
+
+      <div
+        class="section-title toggle"
+        role="button"
+        tabindex="0"
+        onclick={() => (nightsOpen = !nightsOpen)}
+        onkeydown={(e) => e.key === 'Enter' && (nightsOpen = !nightsOpen)}
+      >
         Nights
         {#if isAdmin}
           <div class="scope-toggle">
-            <button class:active={viewScope === 'mine'} onclick={() => setViewScope('mine')}>Mine</button>
-            <button class:active={viewScope === 'all'} onclick={() => setViewScope('all')}>Everyone</button>
+            <button class:active={viewScope === 'mine'} onclick={(e) => { e.stopPropagation(); setViewScope('mine'); }}>Mine</button>
+            <button class:active={viewScope === 'all'} onclick={(e) => { e.stopPropagation(); setViewScope('all'); }}>Everyone</button>
           </div>
         {/if}
+        <span class="chev">{nightsOpen ? '▴' : '▾'}</span>
       </div>
-      <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+      {#if nightsOpen}
+        <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+      {/if}
 
-      <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+      <Badges {nights} />
 
       <div class="foot">
         <b>Points/game</b> is the fair comparison across nights, since game counts vary.<br />
@@ -267,6 +279,16 @@
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .section-title.toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .chev {
+    font-size: 11px;
   }
   .scope-toggle {
     display: flex;

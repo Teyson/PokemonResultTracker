@@ -1,9 +1,10 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, Night, NightInput, DeckSummary } from '$lib/types';
+  import type { ClientPrincipal, Night, NightInput, DeckSummary, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
+  import { nightInSeason, currentSeasonId, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
@@ -29,12 +30,60 @@
   let viewScope = $state<'mine' | 'all'>('mine');
   let nightsOpen = $state(false);
 
+  let seasonsList = $state<Season[]>([]);
+  let seasonsLoaded = $state(false);
+  let selectedSeasonId = $state<string | 'all'>('all');
+  let seasonDefaulted = $state(false);
+  let moreSeasonsOpen = $state(false);
+  let seasonSwitcherEl: HTMLDivElement | undefined = $state();
+
+  // Keep the pill row from growing without bound as seasons accumulate over
+  // the years — only the most recent few are always-visible pills; older ones
+  // live behind a "More" dropdown instead of wrapping into extra rows.
+  const VISIBLE_SEASON_COUNT = 3;
+
   $effect(() => {
     if (isMember && !nightsLoaded) {
       loadNights();
       loadDecks();
     }
+    if (isMember && !seasonsLoaded) {
+      loadSeasons();
+    }
   });
+
+  // Auto-select the current season only once, the first time seasons finish
+  // loading — after that, the user's own pill choice always wins, even if
+  // seasonsList refetches later.
+  $effect(() => {
+    if (seasonsLoaded && !seasonDefaulted) {
+      const id = currentSeasonId(seasonsList, todayISO());
+      if (id) selectedSeasonId = id;
+      seasonDefaulted = true;
+    }
+  });
+
+  let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  let displayNights = $derived(
+    selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
+  );
+
+  let visibleSeasons = $derived(seasonsList.slice(0, VISIBLE_SEASON_COUNT));
+  let overflowSeasons = $derived(seasonsList.slice(VISIBLE_SEASON_COUNT));
+  let selectedIsOverflow = $derived(overflowSeasons.some((s) => s.id === selectedSeasonId));
+
+  function pickSeason(id: string | 'all') {
+    selectedSeasonId = id;
+    moreSeasonsOpen = false;
+  }
+
+  function onSeasonSwitcherDocClick(e: MouseEvent) {
+    if (moreSeasonsOpen && seasonSwitcherEl && !seasonSwitcherEl.contains(e.target as Node)) moreSeasonsOpen = false;
+  }
+
+  function onSeasonSwitcherKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') moreSeasonsOpen = false;
+  }
 
   async function loadNights() {
     try {
@@ -51,6 +100,15 @@
       decks = (await api<DeckSummary[]>('/api/decks')) ?? [];
     } catch (e) {
       toast(`Could not load decks: ${(e as Error).message}`, true);
+    }
+  }
+
+  async function loadSeasons() {
+    try {
+      seasonsList = (await api<Season[]>('/api/seasons')) ?? [];
+      seasonsLoaded = true;
+    } catch (e) {
+      toast(`Could not load seasons: ${(e as Error).message}`, true);
     }
   }
 
@@ -100,6 +158,8 @@
   <title>Pokémon Result Tracker</title>
 </svelte:head>
 
+<svelte:window onclick={onSeasonSwitcherDocClick} onkeydown={onSeasonSwitcherKeydown} />
+
 {#if !auth.loading}
   {#if !auth.principal}
     <div class="gate">
@@ -137,7 +197,39 @@
         <NavMenu {isAdmin} principal={auth.principal} />
       </div>
 
-      <Scoreboard {nights} />
+      {#if seasonsList.length > 0}
+        <div class="season-switcher" bind:this={seasonSwitcherEl}>
+          <button class="pill" class:active={selectedSeasonId === 'all'} onclick={() => pickSeason('all')}>All time</button>
+          {#each visibleSeasons as s (s.id)}
+            <button class="pill" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}>{s.name}</button>
+          {/each}
+          {#if overflowSeasons.length > 0}
+            <div class="more-wrap">
+              <button
+                class="pill more-trigger"
+                class:active={selectedIsOverflow}
+                aria-haspopup="true"
+                aria-expanded={moreSeasonsOpen}
+                onclick={() => (moreSeasonsOpen = !moreSeasonsOpen)}
+              >
+                {selectedIsOverflow ? selectedSeason?.name : 'More'}
+                <span class="chev-sm">▾</span>
+              </button>
+              {#if moreSeasonsOpen}
+                <div class="more-menu">
+                  {#each overflowSeasons as s (s.id)}
+                    <button class="more-item" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}
+                      >{s.name}</button
+                    >
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <Scoreboard nights={displayNights} />
       <Records {nights} />
       <NightForm
         {nights}
@@ -148,7 +240,7 @@
         onCancel={() => (editing = null)}
       />
 
-      <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+      <DeckTable nights={displayNights} showOwner={isAdmin && viewScope === 'all'} />
 
       <CalendarHeatmap {nights} />
 
@@ -169,7 +261,7 @@
         <span class="chev">{nightsOpen ? '▴' : '▾'}</span>
       </div>
       {#if nightsOpen}
-        <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+        <NightsList nights={displayNights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
       {/if}
 
       <Badges {nights} />
@@ -229,6 +321,85 @@
     font-size: 12px;
     letter-spacing: 0.04em;
     margin-top: 3px;
+  }
+
+  .season-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .season-switcher .pill {
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 5px 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .season-switcher .pill.active {
+    color: var(--text);
+    border-color: var(--muted2);
+    background: var(--panel2);
+  }
+  .more-wrap {
+    position: relative;
+    flex: 0 0 auto;
+  }
+  .more-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .chev-sm {
+    font-size: 8px;
+    color: var(--muted2);
+    line-height: 1;
+    transition: transform 0.15s;
+  }
+  .more-trigger[aria-expanded='true'] .chev-sm {
+    transform: rotate(180deg);
+  }
+  .more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    max-height: 260px;
+    overflow-y: auto;
+    min-width: 160px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  .more-item {
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    text-decoration: none;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    padding: 8px 10px;
+    white-space: nowrap;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-item:hover {
+    background: var(--panel2);
+  }
+  .more-item.active {
+    color: var(--gold);
   }
 
   .section-title {

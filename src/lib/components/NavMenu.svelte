@@ -55,6 +55,7 @@
         <div class="divider">Admin</div>
         <a class="item admin" href="/admin" onclick={navigate}>Manage users</a>
         <a class="item admin" href="/decks" onclick={navigate}>Manage decks</a>
+        <a class="item admin" href="/seasons" onclick={navigate}>Manage seasons</a>
       {/if}
       <div class="divider">Theme</div>
       <div class="theme-row"><ThemeToggle /></div>

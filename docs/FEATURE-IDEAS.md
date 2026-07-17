@@ -326,6 +326,13 @@ Rank ties by points, then games ascending (reward efficiency); document it.
 
 ### 9. Seasons
 
+> **Status: implemented in PR #48.** Season creation/editing/deletion is
+> admin-only, from a dedicated `/seasons` page (not a card under `/admin`)
+> linked from the nav menu, per the user's refinement of this idea's original
+> scoping. The Leaderboard page (idea #8) was deliberately left out of the
+> season-filtering — it aggregates server-side for privacy, and scoping it by
+> season is a separate change to that boundary.
+
 **What.** Partition play into named seasons (e.g. "Spring 2026"). Scoreboard,
 DeckTable, and standings default to the current season; a switcher reveals past
 seasons; an all-time view remains.

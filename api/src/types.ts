@@ -48,6 +48,14 @@ export interface UsersResponse {
   users: AllowedUserResponse[];
 }
 
+/** A named partition of play, e.g. "Spring 2026". endsOn null means open-ended (current). */
+export interface SeasonResponse {
+  id: string;
+  name: string;
+  startsOn: string;
+  endsOn: string | null;
+}
+
 /** One player's season totals for the leaderboard — league nights only, never per-night detail. */
 export interface LeaderboardEntryResponse {
   login: string;

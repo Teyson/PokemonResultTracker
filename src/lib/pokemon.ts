@@ -1,4 +1,4 @@
-import type { Night } from './types';
+import type { Night, Season } from './types';
 
 export const TYPES: [string, string][] = [
   ['Grass', '#63bc5a'],
@@ -93,6 +93,11 @@ function toISOUTC(d: Date): string {
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
+/** Today as a YYYY-MM-DD string, UTC — for date-range comparisons like season membership. */
+export function todayISO(): string {
+  return toISOUTC(new Date());
+}
+
 /** All Tuesdays that fall within the given year, chronological, as ISO date strings (UTC). */
 export function tuesdaysOfYear(year: number): string[] {
   const out: string[] = [];
@@ -131,4 +136,20 @@ export function fmtDate(iso: string): string {
 export function fmtShort(iso: string): string {
   const [, m, dd] = iso.split('-').map(Number);
   return `${dd}/${m}`;
+}
+
+/** Whether a night's date falls within a season's range — endsOn null means open-ended. */
+export function nightInSeason(n: Pick<Night, 'date'>, season: Season): boolean {
+  return n.date >= season.startsOn && (!season.endsOn || n.date <= season.endsOn);
+}
+
+/**
+ * The id of the season whose range contains today, or null if none does (an
+ * off-season gap, or no seasons defined yet). Deliberately does not fall back
+ * to "most recently started season" — an undefined today defaults to the
+ * honest all-time view rather than a stale season.
+ */
+export function currentSeasonId(seasonsList: Season[], todayISO: string): string | null {
+  const match = seasonsList.find((s) => todayISO >= s.startsOn && (!s.endsOn || todayISO <= s.endsOn));
+  return match ? match.id : null;
 }

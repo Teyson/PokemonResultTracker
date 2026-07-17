@@ -1,6 +1,6 @@
 # Feature ideas backlog
 
-Thirty well-scoped feature ideas for the Pokémon Result Tracker. This file is written
+Thirty-five well-scoped feature ideas for the Pokémon Result Tracker. This file is written
 for an implementing agent (or human) picking up **one** idea and building it end-to-end.
 Each idea explains what it is, why it's worth doing, how it maps onto this codebase,
 an effort estimate, and the pitfalls specific to this repo's architecture.
@@ -21,7 +21,7 @@ an effort estimate, and the pitfalls specific to this repo's architecture.
 ## Read this first — repo constraints every idea inherits
 
 These are the facts about this codebase that most often invalidate a naive
-implementation plan. All 30 ideas below assume them.
+implementation plan. All 35 ideas below assume them.
 
 - **Frontend is prerendered static** (`adapter-static`, `prerender = true` in
   `src/routes/+layout.ts`). There is **no SSR at request time**. Consequences:
@@ -466,6 +466,10 @@ visibility decision made in idea 8.
   as an outlined series rather than forking it).
 
 **Effort:** M. **Depends on:** 8.
+**Seasons (#9) note.** Filter both players' nights with `nightInSeason`
+(`src/lib/pokemon.ts`) behind the same switcher as the main page, defaulting to
+the current season — reuse the `SeasonSwitcher` extraction proposed in idea 32
+rather than forking the pill + overflow-dropdown UI.
 
 ### 15. Night report — the Tuesday recap
 
@@ -484,6 +488,8 @@ whereas idea 8 is the season-long race.
   `/nights` route (query-string date, rewrite rule as usual).
 
 **Effort:** S–M. **Depends on:** 8.
+**Seasons (#9) note.** Group the browsable date list by season (gap dates under
+an "off-season" heading) so a year of Tuesdays stays navigable.
 
 ---
 
@@ -555,6 +561,11 @@ night I noted the mulligan rule" means endless scrolling.
 **Effort:** S.
 **Pitfalls.** When idea 19 (pagination) lands, in-memory filtering breaks —
 if both are planned, land 19 first or note the interaction in the PR.
+**Seasons (#9) note.** The "this season" date-range option should come from
+`/api/seasons` rather than a hardcoded range — and since the main page now has
+a season switcher (shipped with #9), this filter should compose with the active
+season selection (filter within the already-season-filtered nights) instead of
+adding a second, competing date filter.
 
 ### 19. API pagination for nights
 
@@ -580,6 +591,11 @@ more features assume the full array.
 **Effort:** M.
 **Pitfalls.** The partial-aggregation trap above is the whole difficulty of this
 idea — call it out explicitly.
+**Seasons (#9) note.** The season switcher filters client-side over the full
+nights array, so it's one more aggregate-style consumer: either keep fetching
+everything for the switcher and aggregates and paginate only the list rendering
+(the recommended option above), or move season filtering server-side with
+date-range params.
 
 ### 20. Soft delete with undo
 
@@ -652,6 +668,10 @@ Export is data insurance; import enables migration and disaster recovery.
 - UI: export button near the Nights header; import card on `/admin`.
 
 **Effort:** M (export alone: S).
+**Seasons (#9) note.** Include a derived `season` name column in exports —
+resolve each night's season by date range at export time (there's no FK, so the
+export is the only place it materializes). Import needs no change; season
+membership re-derives automatically from the dates.
 **Pitfalls.** Import assigns ownership — imported nights should belong to the
 importing admin unless the JSON carries a `createdBy` that matches an existing
 user's `github_login`; define and Zod-enforce the rule. Never allow import to
@@ -781,7 +801,7 @@ data.
 **How.**
 - Schema: a `settings` key/value table (`key nvarchar(50) pk`,
   `value nvarchar(500)`) holding `shareToken` (null/absent = disabled). A
-  settings table is also reusable by future ideas (28, 9).
+  settings table is also reusable by future ideas (28).
 - API: `GET /api/share?key=<token>` — **anonymous route** (add
   `/api/share` with `"allowedRoles": ["anonymous"]` in
   `staticwebapp.config.json` — note other `/api/*` rules require
@@ -800,6 +820,10 @@ payload aggregate-only and notes-free, and don't leak member GitHub handles if
 the league prefers not to (make handle display a choice in the PR). Get the
 `staticwebapp.config.json` route ordering right and test unauthenticated in a
 private browser window.
+**Seasons (#9) note.** "Season standings" can now mean a real season: default
+the shared payload to the current season (fall back to all-time when no season
+contains today) and include the season name in the payload so the public page
+can label what it's showing.
 
 ### 28. Personal season goals
 
@@ -819,6 +843,12 @@ others — the introvert's counterpart to idea 8.
   array against each goal; a small "add goal" form (metric select + number).
 
 **Effort:** M. **Pairs with:** 9.
+**Seasons (#9) note.** Idea 9 has shipped, so take the `seasonId` branch of the
+schema above: nullable `seasonId int` referencing `seasons.id` — either a plain
+column with no DB-level FK (matching how `nights` relate to seasons) or an FK
+with `ON DELETE SET NULL`, so deleting a season neither fails on referencing
+goals nor deletes them. Compute progress by filtering the nights array with `nightInSeason`
+(`src/lib/pokemon.ts`).
 
 ### 29. Deck randomizer — "what should I play tonight?"
 
@@ -880,6 +910,139 @@ a night was deleted and whose/when, not its body.
 
 ---
 
+## E. Season follow-ups
+
+Idea 9 is implemented (PR #48): admin-managed seasons on a dedicated `/seasons`
+page, a `seasons` table with **no FK from `nights`** (membership derived by date
+range at read time), pure helpers `nightInSeason`/`currentSeasonId` in
+`src/lib/pokemon.ts`, and a season switcher on the main page (recent-season
+pills plus a "More" overflow dropdown) filtering Scoreboard, DeckTable, and the
+nights list. Three boundaries were left in place deliberately, and ideas 31–35
+build on or revisit them: Records (#10), Badges (#26), and the calendar heatmap
+(#12) still receive the full unfiltered nights array (they're lifetime and
+attendance views by nature), and the Leaderboard (#8) stays all-time because it
+aggregates server-side for privacy.
+
+### 31. Season awards & champion recap
+
+**What.** Automatically-computed per-season awards, distinct from #26's lifetime
+badges: Season Champion (best PPG among members, minimum games), most nights
+attended, best deck of the season, biggest single night — shown when an ended
+season is selected in the switcher, with the current season's marked
+provisional.
+
+**Why.** #26's badges are one-shot lifetime milestones — once earned, done
+forever. Seasons create a repeatable award cycle, and that cycle is the real
+retention loop: every season, everyone starts from zero again.
+
+**How.**
+- Frontend-only for the personal awards: follow the `src/lib/achievements.ts`
+  evaluator pattern — a new `seasonAwards.ts` + panel fed season-filtered
+  nights via `nightInSeason`. Do **not** repoint the existing `Badges.svelte`
+  at filtered nights; the main page passes it the full array deliberately.
+- The champion/cross-player awards need other members' season numbers — that's
+  idea 32's endpoint. Ship the personal awards first if 32 isn't in yet.
+
+**Effort:** S–M. **Depends on:** 9; the champion award depends on 32.
+**Pitfalls.** An open-ended season (null `endsOn`) isn't decided — only render
+"champion" for ended seasons and label the running season's awards provisional.
+
+### 32. Season-scoped leaderboard
+
+**What.** The same season switcher the main page has, on `/leaderboard`:
+defaults to the current season, past seasons selectable, "All time" still
+available.
+
+**Why.** Idea 9 deliberately left the leaderboard all-time-only because it
+aggregates server-side (keeping raw nights private between members). But the
+season is where the race actually is — an all-time-only leaderboard goes stale
+for exactly the reason seasons exist.
+
+**How.**
+- API: extend the leaderboard GET with an optional Zod-validated `?seasonId=`;
+  the handler looks up that season's range and filters `played_on` in SQL
+  (`>= startsOn`, and `<= endsOn` when set) **before** aggregating, so the
+  privacy boundary stays server-side. No param = all-time, keeping the
+  response backward compatible.
+- Frontend: first extract the pill + "More" overflow switcher out of
+  `src/routes/+page.svelte` into `src/lib/components/SeasonSwitcher.svelte`,
+  then use it on both pages — don't fork the overflow-dropdown logic. Keep the
+  default-to-current-season decision in each page, not in the component.
+
+**Effort:** M. **Depends on:** 8, 9. **Pairs with:** 31, 33.
+**Pitfalls.** An unknown `seasonId` should 404, not silently return all-time.
+When extracting the switcher, keep the main page pixel-identical — it's now the
+most-seen control in the app.
+
+### 33. Season recap & hall of fame
+
+**What.** For each ended season, a recap view: final top-3 standings, best deck
+(minimum games), biggest night, and totals (nights/games played) — plus a "hall
+of fame" strip listing every past season's champion.
+
+**Why.** Idea 9's own pitch was that seasons "create natural champion moments" —
+this is that moment's payoff screen. Without it, a season just ends silently.
+
+**How.**
+- Derive everything at read time from the season-scoped leaderboard (32) plus
+  the member's own nights — no snapshot table, consistent with the no-FK
+  design. The hall of fame maps ended seasons → champion via the same endpoint.
+- Home: `/leaderboard` — a recap card when an ended season is selected, and the
+  hall-of-fame strip above the standings. (`/seasons` is admin-only, so the
+  recap can't live there.)
+
+**Effort:** M. **Depends on:** 32.
+**Pitfalls.** Deriving means a past champion can retroactively change if an old
+night is edited or deleted — at this scale that's self-correcting, not a bug,
+but don't cache or snapshot recap results anywhere.
+
+### 34. Season progress header
+
+**What.** A one-line context strip next to the season switcher: "Spring 2026 ·
+week 6 of 13 · ends Jun 30", shifting to a countdown tone in the final weeks,
+and an "off-season" hint when today falls in a gap between seasons. Optionally
+mark season boundaries on the calendar heatmap (#12) with subtle separators.
+
+**Why.** Seasons only change behavior if people can feel where they are in one —
+"3 weeks left" is what makes a late-season push happen.
+
+**How.**
+- Frontend-only. Helpers live next to `nightInSeason`/`currentSeasonId` in
+  `src/lib/pokemon.ts`; week math is counting Tuesdays between ISO dates, with
+  the same UTC-safe date handling as #12 (share the helper, don't duplicate).
+- Open-ended seasons (null `endsOn`) render "week 6" with no total and no
+  countdown.
+
+**Effort:** S. **Depends on:** 9.
+**Pitfalls.** The usual ISO/UTC discipline — no local-timezone `Date`
+arithmetic. Keep it one line; it's context, not a widget.
+
+### 35. Season-over-season trends
+
+**What.** A compact per-season breakdown of your own play: one row per season
+(name, nights, record, PPG, ▲/▼ vs the previous season), plus per-season bests
+in the Records panel — #10's scope already lists "personal-best PPG season",
+which can now mean a real season instead of a proxy.
+
+**Why.** #13's form chips answer "lately" and #10's records answer "ever";
+seasons add the natural middle timescale — "am I actually improving season over
+season?"
+
+**How.**
+- Frontend-only: group the nights array by season via `nightInSeason`, reuse
+  `pts`/`games`/`ppg` from `src/lib/pokemon.ts`. Render as a collapsible near
+  the Records panel, or as new record cards inside it ("Best season: Spring
+  2026 · 2.10 PPG").
+- Gap nights belong to no season: exclude them from season rows (consistent
+  with the switcher) and don't present the rows as summing to the all-time
+  totals.
+
+**Effort:** S. **Depends on:** 9. **Pairs with:** 10, 13.
+**Pitfalls.** Put a minimum-games floor under "best season" records (and say so
+in the label), or one lucky three-game season tops the list forever.
+
+---
+
 ## Suggested first picks
 
 If you're an agent choosing without further user input, the best
@@ -895,3 +1058,10 @@ value-to-risk picks are, in order:
 
 Ideas requiring an explicit product decision from the user before implementing:
 **#8/#14/#15** (member-to-member visibility) and **#27** (public exposure).
+
+> **Update (July 2026):** all five original picks above have shipped, and #8's
+> visibility decision has been made (members see the leaderboard). Best current
+> picks among what's left: **#32** (season-scoped leaderboard — unlocks 31 and
+> 33), **#22** export (data insurance, S on its own), **#17** quick-log,
+> **#18** nights filtering, and **#14/#15** now that #8 has settled the
+> visibility question. **#27** still needs its own product decision.

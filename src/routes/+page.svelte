@@ -127,11 +127,13 @@
   {:else}
     <div class="wrap">
       <div class="masthead">
-        <PokeBall size={34} />
-        <div class="title">
-          <h1>Pokémon Result Tracker</h1>
-          <div class="sub">casual Pokémon TCG log</div>
-        </div>
+        <a class="brand" href="/">
+          <PokeBall size={34} />
+          <div class="title">
+            <h1>Pokémon Result Tracker</h1>
+            <div class="sub">casual Pokémon TCG log</div>
+          </div>
+        </a>
         <NavMenu {isAdmin} principal={auth.principal} />
       </div>
 
@@ -194,6 +196,20 @@
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+  .brand:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
   .masthead .title {
     flex: 1;

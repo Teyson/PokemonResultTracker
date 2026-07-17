@@ -124,5 +124,5 @@ export function fmtDate(iso: string): string {
 
 export function fmtShort(iso: string): string {
   const [, m, dd] = iso.split('-').map(Number);
-  return `${m}/${dd}`;
+  return `${dd}/${m}`;
 }

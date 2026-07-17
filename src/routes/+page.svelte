@@ -1,9 +1,10 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, Night, NightInput, DeckSummary } from '$lib/types';
+  import type { ClientPrincipal, Night, NightInput, DeckSummary, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
+  import { nightInSeason, currentSeasonId, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
@@ -29,12 +30,36 @@
   let viewScope = $state<'mine' | 'all'>('mine');
   let nightsOpen = $state(false);
 
+  let seasonsList = $state<Season[]>([]);
+  let seasonsLoaded = $state(false);
+  let selectedSeasonId = $state<string | 'all'>('all');
+  let seasonDefaulted = $state(false);
+
   $effect(() => {
     if (isMember && !nightsLoaded) {
       loadNights();
       loadDecks();
     }
+    if (isMember && !seasonsLoaded) {
+      loadSeasons();
+    }
   });
+
+  // Auto-select the current season only once, the first time seasons finish
+  // loading — after that, the user's own pill choice always wins, even if
+  // seasonsList refetches later.
+  $effect(() => {
+    if (seasonsLoaded && !seasonDefaulted) {
+      const id = currentSeasonId(seasonsList, todayISO());
+      if (id) selectedSeasonId = id;
+      seasonDefaulted = true;
+    }
+  });
+
+  let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  let displayNights = $derived(
+    selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
+  );
 
   async function loadNights() {
     try {
@@ -51,6 +76,15 @@
       decks = (await api<DeckSummary[]>('/api/decks')) ?? [];
     } catch (e) {
       toast(`Could not load decks: ${(e as Error).message}`, true);
+    }
+  }
+
+  async function loadSeasons() {
+    try {
+      seasonsList = (await api<Season[]>('/api/seasons')) ?? [];
+      seasonsLoaded = true;
+    } catch (e) {
+      toast(`Could not load seasons: ${(e as Error).message}`, true);
     }
   }
 
@@ -137,7 +171,16 @@
         <NavMenu {isAdmin} principal={auth.principal} />
       </div>
 
-      <Scoreboard {nights} />
+      {#if seasonsList.length > 0}
+        <div class="season-switcher">
+          <button class:active={selectedSeasonId === 'all'} onclick={() => (selectedSeasonId = 'all')}>All time</button>
+          {#each seasonsList as s (s.id)}
+            <button class:active={selectedSeasonId === s.id} onclick={() => (selectedSeasonId = s.id)}>{s.name}</button>
+          {/each}
+        </div>
+      {/if}
+
+      <Scoreboard nights={displayNights} />
       <Records {nights} />
       <NightForm
         {nights}
@@ -148,7 +191,7 @@
         onCancel={() => (editing = null)}
       />
 
-      <DeckTable {nights} showOwner={isAdmin && viewScope === 'all'} />
+      <DeckTable nights={displayNights} showOwner={isAdmin && viewScope === 'all'} />
 
       <CalendarHeatmap {nights} />
 
@@ -169,7 +212,7 @@
         <span class="chev">{nightsOpen ? '▴' : '▾'}</span>
       </div>
       {#if nightsOpen}
-        <NightsList {nights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+        <NightsList nights={displayNights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
       {/if}
 
       <Badges {nights} />
@@ -229,6 +272,29 @@
     font-size: 12px;
     letter-spacing: 0.04em;
     margin-top: 3px;
+  }
+
+  .season-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .season-switcher button {
+    font-family: inherit;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 5px 13px;
+    cursor: pointer;
+  }
+  .season-switcher button.active {
+    color: var(--text);
+    border-color: var(--muted2);
+    background: var(--panel2);
   }
 
   .section-title {

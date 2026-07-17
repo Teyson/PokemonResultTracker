@@ -104,6 +104,23 @@ export const matches = mssqlTable('matches', {
 });
 
 /**
+ * Named partitions of play (e.g. "Spring 2026"), managed by the admin from
+ * /seasons. Deliberately has no FK on nights — a night's season is derived at
+ * read time by comparing playedOn against [startsOn, endsOn], so adding or
+ * editing a season never requires backfilling existing nights. endsOn null
+ * means open-ended (the current season).
+ */
+export const seasons = mssqlTable('seasons', {
+  id: int().primaryKey().identity(),
+  name: nvarchar({ length: 100 }).notNull(),
+  startsOn: date('starts_on', { mode: 'string' }).notNull(),
+  endsOn: date('ends_on', { mode: 'string' }),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
  * Trail of admin/mutating actions worth being able to answer "who did that,
  * and when" about — member add/remove, an admin editing/deleting someone
  * else's night, deck merge/rename. actorLogin is a denormalized copy of the

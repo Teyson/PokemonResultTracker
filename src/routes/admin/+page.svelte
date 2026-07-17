@@ -6,6 +6,7 @@
   import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import NavMenu from '$lib/components/NavMenu.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -137,9 +138,7 @@
   {:else}
     <div class="wrap">
       <div class="topbar">
-        <a class="back" href="/">← Tracker</a>
-        <a class="back" href="/decks">Manage decks</a>
-        <a class="back" href="/logout">Sign out</a>
+        <NavMenu {isAdmin} />
         <ThemeToggle />
       </div>
       <h1>League members</h1>
@@ -258,18 +257,6 @@
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
-  }
-  .back {
-    font-size: 12px;
-    color: var(--muted);
-    text-decoration: none;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 6px 12px;
-  }
-  .back:hover {
-    color: var(--text);
-    border-color: var(--muted2);
   }
   h1 {
     font-family: var(--display);

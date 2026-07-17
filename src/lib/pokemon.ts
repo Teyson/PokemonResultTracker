@@ -31,6 +31,12 @@ export function ppg(n: Pick<Night, 'w' | 't' | 'l'>): number {
   return g ? pts(n) / g : 0;
 }
 
+/** Score rate on the same 0-3 ppg scale used everywhere else in the app, expressed as a percent. */
+export function scorePct(n: Pick<Night, 'w' | 't' | 'l'>): number | null {
+  const g = games(n);
+  return g ? Math.round((pts(n) / (g * 3)) * 100) : null;
+}
+
 // Exported so other chronological-replay logic (e.g. src/lib/elo.ts) uses the
 // exact same tie-break order rather than redefining it.
 export function sortedByDate(nights: Night[]): Night[] {

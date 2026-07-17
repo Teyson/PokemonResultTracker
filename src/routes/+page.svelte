@@ -14,6 +14,7 @@
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import NavMenu from '$lib/components/NavMenu.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -133,9 +134,7 @@
           {/if}
           <span>{auth.principal.userDetails}</span>
         </span>
-        {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>
-          <a class="tlink admin" href="/decks">Manage decks</a>{/if}
-        <a class="tlink" href="/logout">Sign out</a>
+        <NavMenu {isAdmin} />
         <ThemeToggle />
       </div>
 
@@ -223,24 +222,6 @@
     background: var(--panel2);
     object-fit: cover;
   }
-  .tlink {
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    text-decoration: none;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 4px 10px;
-  }
-  .tlink:hover {
-    color: var(--text);
-    border-color: var(--muted2);
-  }
-  .tlink.admin {
-    color: var(--gold);
-    border-color: rgba(246, 201, 69, 0.35);
-  }
-
   .masthead {
     display: flex;
     align-items: center;

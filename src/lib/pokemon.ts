@@ -70,6 +70,13 @@ export function recentTuesday(): string {
   return toISO(d);
 }
 
+/** Whether a YYYY-MM-DD date string falls on a Tuesday, the league's usual night. */
+export function isTuesday(iso: string): boolean {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  return new Date(y, m - 1, d).getDay() === 2;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }

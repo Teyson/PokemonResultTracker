@@ -1,0 +1,1 @@
+ALTER TABLE [nights] ADD [is_league_night] bit NOT NULL CONSTRAINT [nights_is_league_night_default] DEFAULT (1);

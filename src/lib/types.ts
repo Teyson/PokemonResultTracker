@@ -16,6 +16,7 @@ export interface Night {
   t: number;
   l: number;
   notes: string | null;
+  isLeagueNight: boolean;
   createdBy: string;
   matches?: Match[];
   // Only present on the admin scope=deleted view.
@@ -29,6 +30,7 @@ export interface NightInput {
   w: number;
   t: number;
   l: number;
+  isLeagueNight: boolean;
   matches?: {
     result: 'W' | 'T' | 'L';
     opponentDeckId?: string;

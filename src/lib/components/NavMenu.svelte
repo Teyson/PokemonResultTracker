@@ -1,5 +1,9 @@
 <script lang="ts">
-  let { isAdmin = false }: { isAdmin?: boolean } = $props();
+  import type { ClientPrincipal } from '$lib/types';
+  import { avatarUrl } from '$lib/auth';
+  import ThemeToggle from './ThemeToggle.svelte';
+
+  let { isAdmin = false, principal = null }: { isAdmin?: boolean; principal?: ClientPrincipal | null } = $props();
 
   let open = $state(false);
   let rootEl: HTMLDivElement;
@@ -36,6 +40,15 @@
   </button>
   {#if open}
     <nav class="menu">
+      {#if principal}
+        <div class="who">
+          {#if avatarUrl(principal)}
+            <img class="av" alt="" src={avatarUrl(principal)} />
+          {/if}
+          <span class="login">{principal.userDetails}</span>
+        </div>
+        <div class="divider"></div>
+      {/if}
       <a class="item" href="/" onclick={navigate}>Tracker</a>
       <a class="item" href="/leaderboard" onclick={navigate}>Leaderboard</a>
       {#if isAdmin}
@@ -43,6 +56,8 @@
         <a class="item admin" href="/admin" onclick={navigate}>Manage users</a>
         <a class="item admin" href="/decks" onclick={navigate}>Manage decks</a>
       {/if}
+      <div class="divider">Theme</div>
+      <div class="theme-row"><ThemeToggle /></div>
       <div class="divider"></div>
       <a class="item" href="/logout">Sign out</a>
     </nav>
@@ -92,12 +107,42 @@
     z-index: 20;
     display: flex;
     flex-direction: column;
-    min-width: 168px;
+    min-width: 180px;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 12px;
     padding: 6px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  .who .av {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--panel2);
+    flex: 0 0 auto;
+    object-fit: cover;
+  }
+  .who .login {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .theme-row {
+    padding: 2px 6px 6px;
+  }
+  .theme-row :global(.theme-toggle) {
+    display: inline-flex;
+    width: max-content;
+    margin-left: 0;
   }
   .item {
     font-size: 12.5px;

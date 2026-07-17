@@ -6,7 +6,6 @@
   import { TYPES, colorOf } from '$lib/pokemon';
   import TypeIcon from '$lib/components/TypeIcon.svelte';
   import Toast from '$lib/components/Toast.svelte';
-  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import NavMenu from '$lib/components/NavMenu.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
@@ -166,11 +165,10 @@
     </div>
   {:else}
     <div class="wrap">
-      <div class="topbar">
-        <NavMenu {isAdmin} />
-        <ThemeToggle />
+      <div class="header">
+        <h1>Deck registry</h1>
+        <NavMenu {isAdmin} principal={auth.principal} />
       </div>
-      <h1>Deck registry</h1>
       <div class="sub">
         Every deck ever logged or picked as an opponent. Rename a typo, merge duplicates into one deck (moves their
         nights and match history over), or delete a deck no one has used yet.
@@ -281,9 +279,9 @@
     max-width: 620px;
     margin: 0 auto;
   }
-  .topbar {
+  .header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
@@ -293,7 +291,7 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-size: 20px;
-    margin: 0 0 4px;
+    margin: 0;
   }
   .sub {
     color: var(--muted);

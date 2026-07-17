@@ -5,7 +5,6 @@
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
-  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import NavMenu from '$lib/components/NavMenu.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
@@ -137,11 +136,10 @@
     </div>
   {:else}
     <div class="wrap">
-      <div class="topbar">
-        <NavMenu {isAdmin} />
-        <ThemeToggle />
+      <div class="header">
+        <h1>League members</h1>
+        <NavMenu {isAdmin} principal={auth.principal} />
       </div>
-      <h1>League members</h1>
       <div class="sub">
         Whitelist who can sign in and log nights. People sign in with GitHub first, then you add their username here
         — they get access the next time they load the page.
@@ -251,9 +249,9 @@
     max-width: 560px;
     margin: 0 auto;
   }
-  .topbar {
+  .header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
@@ -263,7 +261,7 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-size: 20px;
-    margin: 0 0 4px;
+    margin: 0;
   }
   .sub {
     color: var(--muted);

@@ -18,9 +18,8 @@ async function seed() {
     [deck] = await db.select().from(decks).where(eq(decks.id, inserted[0].id));
   }
 
-  // Owner is the local dev-login admin principal (userId `dev-<username>`, see
-  // src/lib/devAuth.ts) so the seed night is owned by the admin when testing
-  // locally. ensureUser creates the matching users row on demand.
+  // Owner is a placeholder local user id, so the seed night has a real owner
+  // when testing locally. ensureUser creates the matching users row on demand.
   const ownerId = await ensureUser(db, 'dev-Teyson', 'Teyson');
 
   const existingNight = await db.select({ id: nights.id }).from(nights).where(eq(nights.deckId, deck.id));

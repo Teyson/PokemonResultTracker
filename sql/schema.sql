@@ -68,9 +68,9 @@ GO
 
 -- ---------------------------------------------------------------------
 -- Optional seed: the first logged night carried over from the old tracker.
--- Delete this block if you'd rather start empty. The owner is the local
--- dev-login admin (user_id `dev-Teyson`, see src/lib/devAuth.ts); a real
--- deployment gets its user rows created automatically on first sign-in.
+-- Delete this block if you'd rather start empty. The owner is a placeholder
+-- local user (user_id `dev-Teyson`); a real deployment gets its user rows
+-- created automatically on first sign-in.
 -- ---------------------------------------------------------------------
 IF NOT EXISTS (SELECT 1 FROM dbo.decks WHERE name = 'Alakazam')
     INSERT INTO dbo.decks (name, energy_type) VALUES ('Alakazam', 'Psychic');

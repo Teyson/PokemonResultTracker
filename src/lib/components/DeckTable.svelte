@@ -11,6 +11,8 @@
 
   let { nights, showOwner = false }: { nights: Night[]; showOwner?: boolean } = $props();
 
+  let open = $state(true);
+
   interface WTL {
     w: number;
     t: number;
@@ -202,8 +204,18 @@
 </script>
 
 {#if decks.length >= 2}
-  <div class="section-title">By deck</div>
-  <div class="decktable">
+  <div
+    class="section-title toggle"
+    role="button"
+    tabindex="0"
+    onclick={() => (open = !open)}
+    onkeydown={(e) => e.key === 'Enter' && (open = !open)}
+  >
+    My decks
+    <span class="sec-chev">{open ? '▴' : '▾'}</span>
+  </div>
+  {#if open}
+  <div class="decktable" transition:slide={{ duration: 220 }}>
     <div class="drow head">
       <span>Deck</span><span>Record</span><span>Pts</span><span>PPG</span><span>Elo</span><span>Form</span><span
       ></span>
@@ -467,6 +479,7 @@
       {/if}
     {/each}
   </div>
+  {/if}
 {/if}
 
 <style>
@@ -486,6 +499,16 @@
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .section-title.toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .sec-chev {
+    font-size: 11px;
   }
   .decktable {
     background: var(--panel);

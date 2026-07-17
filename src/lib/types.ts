@@ -74,6 +74,21 @@ export interface LeaderboardEntry {
   l: number;
 }
 
+/** One admin/mutating action recorded to the audit trail. */
+export interface AuditLogEntry {
+  id: string;
+  actorLogin: string | null;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}
+
+/** A page of the audit trail plus the total row count, for prev/next paging. */
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  total: number;
+}
+
 export interface ClientPrincipal {
   userId: string;
   userDetails: string;

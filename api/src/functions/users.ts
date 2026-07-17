@@ -2,6 +2,7 @@ import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } 
 import { eq, sql, asc } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { allowedUsers } from '../db/schema';
+import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { UsersResponse } from '../types';
 
@@ -80,8 +81,7 @@ app.http('users', {
           return { status: 409, jsonBody: { error: `${login} is already on the list.` } };
         }
 
-        const me = getUser(request);
-        const addedBy = me?.userDetails ?? null;
+        const addedBy = caller.userDetails ?? null;
         const inserted = await db
           .insert(allowedUsers)
           .output({
@@ -92,6 +92,7 @@ app.http('users', {
           })
           .values({ githubLogin: login, role: 'member', addedBy });
         const row = inserted[0];
+        await logAudit(db, caller, 'user.add', `Added ${row.github_login}`, context);
         return {
           status: 201,
           jsonBody: { ...row, id: String(row.id), created_at: toDateOnly(row.created_at) }
@@ -102,11 +103,12 @@ app.http('users', {
       if (!idParam) return { status: 400, jsonBody: { error: 'Missing user id.' } };
       const id = Number(idParam);
       const existing = await db
-        .select({ id: allowedUsers.id })
+        .select({ id: allowedUsers.id, githubLogin: allowedUsers.githubLogin })
         .from(allowedUsers)
         .where(sql`${allowedUsers.id} = ${id} AND ${allowedUsers.role} <> 'admin'`);
       if (existing.length === 0) return { status: 404, jsonBody: { error: 'Member not found (or is an admin).' } };
       await db.delete(allowedUsers).where(eq(allowedUsers.id, id));
+      await logAudit(db, caller, 'user.remove', `Removed ${existing[0].githubLogin}`, context);
       return { status: 204 };
     } catch (err) {
       context.error('users handler failed', err);

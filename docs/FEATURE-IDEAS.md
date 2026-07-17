@@ -296,6 +296,8 @@ rewrite — test by pasting the URL into a fresh tab, not just clicking through.
 
 ### 8. Player leaderboard
 
+> **Status: implemented in PR #45**, alongside a shared nav menu.
+
 **What.** A standings view across members: each player's games, record, points,
 PPG for the season, ranked. Lives on the main page (admin already fetches
 `?scope=all`) or a new `/standings` route visible to all members.

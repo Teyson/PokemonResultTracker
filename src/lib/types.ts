@@ -83,6 +83,12 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
+/** A page of the audit trail plus the total row count, for prev/next paging. */
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  total: number;
+}
+
 export interface ClientPrincipal {
   userId: string;
   userDetails: string;

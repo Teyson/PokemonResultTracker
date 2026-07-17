@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, AllowedUser, UsersResponse, Night, AuditLogEntry } from '$lib/types';
+  import type { ClientPrincipal, AllowedUser, UsersResponse, Night, AuditLogEntry, AuditLogPage } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
@@ -24,7 +24,10 @@
   type DeletedSortKey = 'deck' | 'owner' | 'date' | 'record' | 'deletedAt';
   let deletedSort = $state<{ key: DeletedSortKey; dir: 1 | -1 }>({ key: 'deletedAt', dir: -1 });
 
+  const AUDIT_PAGE_SIZE = 10;
   let auditEntries = $state<AuditLogEntry[]>([]);
+  let auditTotal = $state(0);
+  let auditPage = $state(0);
   let auditLoaded = $state(false);
 
   $effect(() => {
@@ -35,11 +38,24 @@
 
   async function reloadAudit() {
     try {
-      auditEntries = (await api<AuditLogEntry[]>('/api/audit?limit=100')) ?? [];
+      const page = (await api<AuditLogPage>(
+        `/api/audit?limit=${AUDIT_PAGE_SIZE}&offset=${auditPage * AUDIT_PAGE_SIZE}`
+      )) ?? { entries: [], total: 0 };
+      auditEntries = page.entries;
+      auditTotal = page.total;
       auditLoaded = true;
     } catch (e) {
       toast(`Could not load admin activity: ${(e as Error).message}`, true);
     }
+  }
+
+  function auditPageCount(): number {
+    return Math.max(1, Math.ceil(auditTotal / AUDIT_PAGE_SIZE));
+  }
+
+  async function goToAuditPage(page: number) {
+    auditPage = page;
+    await reloadAudit();
   }
 
   async function reloadDeleted() {
@@ -111,6 +127,7 @@
       await api('/api/users', { method: 'POST', body: JSON.stringify({ github_login: login }) });
       loginInput = '';
       await reload();
+      auditPage = 0;
       await reloadAudit();
       toast(`Added ${login}`);
     } catch (e) {
@@ -125,6 +142,7 @@
     try {
       await api(`/api/users/${encodeURIComponent(u.id)}`, { method: 'DELETE' });
       await reload();
+      auditPage = 0;
       await reloadAudit();
       toast(`Removed ${u.github_login}`);
     } catch (e) {
@@ -274,6 +292,15 @@
               </div>
             {/each}
           </div>
+        </div>
+        <div class="pager">
+          <button type="button" disabled={auditPage === 0} onclick={() => goToAuditPage(auditPage - 1)}>‹ Prev</button>
+          <span class="pager-label">Page {auditPage + 1} of {auditPageCount()}</span>
+          <button
+            type="button"
+            disabled={auditPage + 1 >= auditPageCount()}
+            onclick={() => goToAuditPage(auditPage + 1)}>Next ›</button
+          >
         </div>
       {/if}
     </div>
@@ -560,6 +587,39 @@
     font-size: 13px;
     text-align: center;
     padding: 18px;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .pager button {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 14px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .pager button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .pager button:not(:disabled):active {
+    background: var(--panel2);
+  }
+  .pager button:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .pager-label {
+    font-size: 11.5px;
+    color: var(--muted);
   }
   .denied {
     max-width: 400px;

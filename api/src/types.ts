@@ -65,3 +65,9 @@ export interface AuditLogEntryResponse {
   detail: string | null;
   createdAt: string;
 }
+
+/** A page of the audit trail plus the total row count, for prev/next paging. */
+export interface AuditLogResponse {
+  entries: AuditLogEntryResponse[];
+  total: number;
+}

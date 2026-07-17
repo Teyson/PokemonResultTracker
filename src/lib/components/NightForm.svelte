@@ -711,4 +711,16 @@
     outline: 2px solid var(--text);
     outline-offset: 2px;
   }
+
+  @media (max-width: 440px) {
+    .form-row {
+      flex-direction: column;
+    }
+    .nighttype-seg {
+      height: 48px;
+    }
+    .nighttypebtn {
+      font-size: 13.5px;
+    }
+  }
 </style>

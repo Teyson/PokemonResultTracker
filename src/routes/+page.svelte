@@ -199,20 +199,21 @@
 
       {#if seasonsList.length > 0}
         <div class="season-switcher" bind:this={seasonSwitcherEl}>
-          <button class:active={selectedSeasonId === 'all'} onclick={() => pickSeason('all')}>All time</button>
+          <button class="pill" class:active={selectedSeasonId === 'all'} onclick={() => pickSeason('all')}>All time</button>
           {#each visibleSeasons as s (s.id)}
-            <button class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}>{s.name}</button>
+            <button class="pill" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}>{s.name}</button>
           {/each}
           {#if overflowSeasons.length > 0}
             <div class="more-wrap">
               <button
+                class="pill more-trigger"
                 class:active={selectedIsOverflow}
                 aria-haspopup="true"
                 aria-expanded={moreSeasonsOpen}
                 onclick={() => (moreSeasonsOpen = !moreSeasonsOpen)}
               >
                 {selectedIsOverflow ? selectedSeason?.name : 'More'}
-                <span class="chev-sm">{moreSeasonsOpen ? '▴' : '▾'}</span>
+                <span class="chev-sm">▾</span>
               </button>
               {#if moreSeasonsOpen}
                 <div class="more-menu">
@@ -329,7 +330,7 @@
     gap: 6px;
     margin-bottom: 16px;
   }
-  .season-switcher > button {
+  .season-switcher .pill {
     flex: 0 0 auto;
     font-family: inherit;
     font-size: 11.5px;
@@ -342,7 +343,7 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .season-switcher > button.active {
+  .season-switcher .pill.active {
     color: var(--text);
     border-color: var(--muted2);
     background: var(--panel2);
@@ -351,13 +352,19 @@
     position: relative;
     flex: 0 0 auto;
   }
-  .more-wrap > button {
+  .more-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
   }
   .chev-sm {
     font-size: 8px;
+    color: var(--muted2);
+    line-height: 1;
+    transition: transform 0.15s;
+  }
+  .more-trigger[aria-expanded='true'] .chev-sm {
+    transform: rotate(180deg);
   }
   .more-menu {
     position: absolute;

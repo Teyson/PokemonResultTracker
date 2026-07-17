@@ -34,6 +34,13 @@
   let seasonsLoaded = $state(false);
   let selectedSeasonId = $state<string | 'all'>('all');
   let seasonDefaulted = $state(false);
+  let moreSeasonsOpen = $state(false);
+  let seasonSwitcherEl: HTMLDivElement | undefined = $state();
+
+  // Keep the pill row from growing without bound as seasons accumulate over
+  // the years — only the most recent few are always-visible pills; older ones
+  // live behind a "More" dropdown instead of wrapping into extra rows.
+  const VISIBLE_SEASON_COUNT = 3;
 
   $effect(() => {
     if (isMember && !nightsLoaded) {
@@ -60,6 +67,23 @@
   let displayNights = $derived(
     selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
   );
+
+  let visibleSeasons = $derived(seasonsList.slice(0, VISIBLE_SEASON_COUNT));
+  let overflowSeasons = $derived(seasonsList.slice(VISIBLE_SEASON_COUNT));
+  let selectedIsOverflow = $derived(overflowSeasons.some((s) => s.id === selectedSeasonId));
+
+  function pickSeason(id: string | 'all') {
+    selectedSeasonId = id;
+    moreSeasonsOpen = false;
+  }
+
+  function onSeasonSwitcherDocClick(e: MouseEvent) {
+    if (moreSeasonsOpen && seasonSwitcherEl && !seasonSwitcherEl.contains(e.target as Node)) moreSeasonsOpen = false;
+  }
+
+  function onSeasonSwitcherKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') moreSeasonsOpen = false;
+  }
 
   async function loadNights() {
     try {
@@ -134,6 +158,8 @@
   <title>Pokémon Result Tracker</title>
 </svelte:head>
 
+<svelte:window onclick={onSeasonSwitcherDocClick} onkeydown={onSeasonSwitcherKeydown} />
+
 {#if !auth.loading}
   {#if !auth.principal}
     <div class="gate">
@@ -172,11 +198,33 @@
       </div>
 
       {#if seasonsList.length > 0}
-        <div class="season-switcher">
-          <button class:active={selectedSeasonId === 'all'} onclick={() => (selectedSeasonId = 'all')}>All time</button>
-          {#each seasonsList as s (s.id)}
-            <button class:active={selectedSeasonId === s.id} onclick={() => (selectedSeasonId = s.id)}>{s.name}</button>
+        <div class="season-switcher" bind:this={seasonSwitcherEl}>
+          <button class:active={selectedSeasonId === 'all'} onclick={() => pickSeason('all')}>All time</button>
+          {#each visibleSeasons as s (s.id)}
+            <button class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}>{s.name}</button>
           {/each}
+          {#if overflowSeasons.length > 0}
+            <div class="more-wrap">
+              <button
+                class:active={selectedIsOverflow}
+                aria-haspopup="true"
+                aria-expanded={moreSeasonsOpen}
+                onclick={() => (moreSeasonsOpen = !moreSeasonsOpen)}
+              >
+                {selectedIsOverflow ? selectedSeason?.name : 'More'}
+                <span class="chev-sm">{moreSeasonsOpen ? '▴' : '▾'}</span>
+              </button>
+              {#if moreSeasonsOpen}
+                <div class="more-menu">
+                  {#each overflowSeasons as s (s.id)}
+                    <button class="more-item" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}
+                      >{s.name}</button
+                    >
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -277,10 +325,12 @@
   .season-switcher {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
     margin-bottom: 16px;
   }
-  .season-switcher button {
+  .season-switcher > button {
+    flex: 0 0 auto;
     font-family: inherit;
     font-size: 11.5px;
     letter-spacing: 0.02em;
@@ -290,11 +340,59 @@
     border-radius: 20px;
     padding: 5px 13px;
     cursor: pointer;
+    white-space: nowrap;
   }
-  .season-switcher button.active {
+  .season-switcher > button.active {
     color: var(--text);
     border-color: var(--muted2);
     background: var(--panel2);
+  }
+  .more-wrap {
+    position: relative;
+    flex: 0 0 auto;
+  }
+  .more-wrap > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chev-sm {
+    font-size: 8px;
+  }
+  .more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    max-height: 260px;
+    overflow-y: auto;
+    min-width: 160px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  .more-item {
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    text-decoration: none;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    padding: 8px 10px;
+    white-space: nowrap;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-item:hover {
+    background: var(--panel2);
+  }
+  .more-item.active {
+    color: var(--gold);
   }
 
   .section-title {

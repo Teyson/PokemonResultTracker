@@ -8,11 +8,23 @@
   <rect x="4" y="46" width="92" height="8" fill="#0d0f16" />
   <circle cx="50" cy="50" r="14" fill="#fff" stroke="#0d0f16" stroke-width="6" />
   <circle cx="50" cy="50" r="5" fill="#0d0f16" />
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <polyline class="arrow-outline" points="11.5,71 37.8,44.8 55.3,62.3 88.5,29" stroke-width="11" />
+    <polyline class="arrow-outline" points="67.5,29 88.5,29 88.5,50" stroke-width="11" />
+    <polyline class="arrow-line" points="11.5,71 37.8,44.8 55.3,62.3 88.5,29" stroke-width="6" />
+    <polyline class="arrow-line" points="67.5,29 88.5,29 88.5,50" stroke-width="6" />
+  </g>
 </svg>
 
 <style>
   .ball {
     flex: 0 0 auto;
     filter: drop-shadow(0 2px 6px rgba(239, 47, 66, 0.4));
+  }
+  .arrow-outline {
+    stroke: #0d0f16;
+  }
+  .arrow-line {
+    stroke: var(--tie-text, #f6c945);
   }
 </style>

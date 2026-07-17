@@ -203,7 +203,7 @@
   }
 </script>
 
-{#if decks.length >= 2}
+{#if decks.length >= 1}
   <div
     class="section-title toggle"
     role="button"

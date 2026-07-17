@@ -69,6 +69,7 @@ const nightInputSchema = z.object({
   t: nonNegativeInt,
   l: nonNegativeInt,
   notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable()),
+  isLeagueNight: z.boolean().optional().default(true),
   // Detailed mode: when present, replaces the night's per-match log and the
   // w/t/l totals are derived from it instead of the fields above. Absent
   // (quick mode) leaves any existing matches untouched.
@@ -84,6 +85,7 @@ const SELECT_COLUMNS = {
   t: nights.ties,
   l: nights.losses,
   notes: nights.notes,
+  isLeagueNight: nights.isLeagueNight,
   // Owner display name comes from the joined users row, so it always reflects
   // the owner's current GitHub login.
   createdBy: users.githubLogin
@@ -107,6 +109,7 @@ function toResponse(row: {
   t: number;
   l: number;
   notes: string | null;
+  isLeagueNight: boolean;
   createdBy: string;
   deletedAt?: Date | null;
 }): NightResponse {
@@ -358,6 +361,7 @@ app.http('nights', {
               ties: totals.t,
               losses: totals.l,
               notes: input.notes,
+              isLeagueNight: input.isLeagueNight,
               ownerId
             });
           const id = inserted[0].id;
@@ -378,7 +382,15 @@ app.http('nights', {
       await db.transaction(async (tx) => {
         await tx
           .update(nights)
-          .set({ playedOn: input.date, deckId, wins: totals.w, ties: totals.t, losses: totals.l, notes: input.notes })
+          .set({
+            playedOn: input.date,
+            deckId,
+            wins: totals.w,
+            ties: totals.t,
+            losses: totals.l,
+            notes: input.notes,
+            isLeagueNight: input.isLeagueNight
+          })
           .where(eq(nights.id, id));
         await writeMatches(tx, id, resolvedMatches ?? []);
       });

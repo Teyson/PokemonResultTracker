@@ -57,6 +57,7 @@
             <div class="top">
               <span class="deck">{n.deck}</span>
               <span class="chip" style="background:{colorOf(n.type)}22;color:{colorOf(n.type)}">{n.type}</span>
+              <span class="chip nighttype" class:casual={!n.isLeagueNight}>{n.isLeagueNight ? 'League' : 'Casual'}</span>
             </div>
             <div class="date">
               {fmtDate(n.date)}
@@ -191,6 +192,14 @@
     padding: 2px 7px;
     border-radius: 20px;
     font-weight: 600;
+  }
+  .chip.nighttype {
+    background: rgba(246, 201, 69, 0.15);
+    color: var(--gold);
+  }
+  .chip.nighttype.casual {
+    background: var(--panel2);
+    color: var(--muted);
   }
   .night .date {
     font-size: 11.5px;

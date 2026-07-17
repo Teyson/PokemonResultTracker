@@ -16,6 +16,7 @@ export interface NightResponse {
   t: number;
   l: number;
   notes: string | null;
+  isLeagueNight: boolean;
   createdBy: string;
   matches?: MatchResponse[];
   // Only present on the admin scope=deleted view.

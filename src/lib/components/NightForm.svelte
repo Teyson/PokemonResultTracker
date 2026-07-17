@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Night, NightInput, DeckSummary } from '$lib/types';
-  import { recentTuesday } from '$lib/pokemon';
+  import { recentTuesday, isTuesday } from '$lib/pokemon';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
   import { slide } from 'svelte/transition';
 
@@ -89,6 +89,7 @@
   let l = $state(0);
   let detailed = $state(true);
   let matchRows = $state<MatchRow[]>([]);
+  let isLeagueNight = $state(true);
   let saving = $state(false);
 
   $effect(() => {
@@ -101,6 +102,7 @@
       w = editing.w;
       t = editing.t;
       l = editing.l;
+      isLeagueNight = editing.isLeagueNight;
       detailed = (editing.matches?.length ?? 0) > 0;
       matchRows =
         editing.matches?.map((m) => ({
@@ -123,6 +125,7 @@
       w = 0;
       t = 0;
       l = 0;
+      isLeagueNight = true;
       detailed = true;
       matchRows = [];
     }
@@ -184,6 +187,12 @@
     return name ? `vs ${name} ✎` : '+ opponent';
   }
 
+  /** Changing the date re-defaults the night type: Tuesdays are league night, anything else casual. */
+  function onDateInput(v: string) {
+    date = v;
+    isLeagueNight = isTuesday(v);
+  }
+
   function selectDeck(d: DeckOption) {
     newDeck = false;
     deck = d.name;
@@ -223,9 +232,10 @@
             w,
             t,
             l,
+            isLeagueNight,
             matches: matchRows.map((r) => ({ result: r.result, ...resolveOpponent(r), ...resolveWentFirst(r) }))
           }
-        : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l };
+        : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l, isLeagueNight };
       await onSave(input, editing?.id ?? null);
     } finally {
       saving = false;
@@ -236,7 +246,27 @@
 <div class="section-title">{editing ? 'Edit night' : 'Log a night'}</div>
 <div class="card">
   <div class="form-row">
-    <div class="field"><label for="fDate">Date</label><input id="fDate" type="date" bind:value={date} /></div>
+    <div class="field">
+      <label for="fDate">Date</label>
+      <input id="fDate" type="date" value={date} oninput={(e) => onDateInput(e.currentTarget.value)} />
+    </div>
+    <div class="field">
+      <span class="field-label">Night type</span>
+      <div class="nighttype-seg" role="group" aria-label="Night type">
+        <button
+          type="button"
+          class="nighttypebtn"
+          aria-pressed={isLeagueNight}
+          onclick={() => (isLeagueNight = true)}>League</button
+        >
+        <button
+          type="button"
+          class="nighttypebtn"
+          aria-pressed={!isLeagueNight}
+          onclick={() => (isLeagueNight = false)}>Casual</button
+        >
+      </div>
+    </div>
   </div>
 
   <DeckPicker
@@ -395,6 +425,38 @@
     text-transform: uppercase;
     color: var(--muted);
     margin-bottom: 6px;
+  }
+  .nighttype-seg {
+    display: flex;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .nighttypebtn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-right: 1px solid var(--line);
+    background: var(--ink);
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .nighttypebtn:last-child {
+    border-right: none;
+  }
+  .nighttypebtn[aria-pressed='true'] {
+    background: var(--panel2);
+    color: var(--gold);
+  }
+  .nighttypebtn:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: -2px;
   }
   .mode-row {
     display: flex;

@@ -60,6 +60,9 @@ export const nights = mssqlTable('nights', {
   ties: int().notNull().default(0),
   losses: int().notNull().default(0),
   notes: nvarchar({ length: 500 }),
+  // League night (ranked/tracked play) vs casual night — defaults to league
+  // since that's the primary use case this app was built for.
+  isLeagueNight: bit('is_league_night').notNull().default(sql`1`),
   // Owner: a foreign key into users. The display name comes from the joined
   // users row, so it always reflects the owner's current GitHub login.
   ownerId: int('owner_id')

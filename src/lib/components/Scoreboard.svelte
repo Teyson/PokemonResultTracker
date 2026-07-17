@@ -5,8 +5,15 @@
 
   let { nights }: { nights: Night[] } = $props();
 
+  type NightFilter = 'league' | 'casual' | 'overall';
+  let filter = $state<NightFilter>('league');
+
+  let filteredNights = $derived(
+    filter === 'overall' ? nights : nights.filter((n) => n.isLeagueNight === (filter === 'league'))
+  );
+
   let totals = $derived(
-    nights.reduce((a, n) => ({ w: a.w + n.w, t: a.t + n.t, l: a.l + n.l }), { w: 0, t: 0, l: 0 })
+    filteredNights.reduce((a, n) => ({ w: a.w + n.w, t: a.t + n.t, l: a.l + n.l }), { w: 0, t: 0, l: 0 })
   );
   let g = $derived(totals.w + totals.t + totals.l);
   let P = $derived(totals.w * 3 + totals.t);
@@ -14,7 +21,7 @@
   let avgPpg = $derived(g ? seasonPpg.toFixed(2) : '—');
 
   const FORM_WINDOW = 5;
-  let formPpg = $derived(nights.length >= FORM_WINDOW ? rollingPpg(nights, FORM_WINDOW) : null);
+  let formPpg = $derived(filteredNights.length >= FORM_WINDOW ? rollingPpg(filteredNights, FORM_WINDOW) : null);
   let formDelta = $derived(formPpg !== null ? formPpg - seasonPpg : 0);
 
   /** Splits every match with a recorded turn order into going-first / going-second W/T/L totals. */
@@ -33,13 +40,20 @@
     return { first, second };
   }
 
-  let turnOrder = $derived(turnOrderTotals(nights));
+  let turnOrder = $derived(turnOrderTotals(filteredNights));
   let firstGames = $derived(turnOrder.first.w + turnOrder.first.t + turnOrder.first.l);
   let secondGames = $derived(turnOrder.second.w + turnOrder.second.t + turnOrder.second.l);
 </script>
 
 <div class="board">
-  <div class="board-label">Season record</div>
+  <div class="board-top">
+    <div class="board-label">Season record</div>
+    <div class="filter-toggle" role="group" aria-label="Night type filter">
+      <button type="button" class:active={filter === 'league'} onclick={() => (filter = 'league')}>League</button>
+      <button type="button" class:active={filter === 'casual'} onclick={() => (filter = 'casual')}>Casual</button>
+      <button type="button" class:active={filter === 'overall'} onclick={() => (filter = 'overall')}>Overall</button>
+    </div>
+  </div>
   <div class="wtl">
     <div class="cell w"><div class="num">{totals.w}</div><div class="tag">Wins</div></div>
     <div class="cell t"><div class="num">{totals.t}</div><div class="tag">Ties</div></div>
@@ -79,8 +93,8 @@
       </div>
     </div>
   {/if}
-  {#if nights.length >= 2}
-    <TrendChart {nights} avg={avgPpg} />
+  {#if filteredNights.length >= 2}
+    <TrendChart nights={filteredNights} avg={avgPpg} />
   {/if}
 </div>
 
@@ -102,14 +116,46 @@
     background-size: 14px 14px;
     pointer-events: none;
   }
+  .board-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    position: relative;
+    flex-wrap: wrap;
+  }
   .board-label {
     font-family: var(--display);
     font-size: 11px;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 12px;
     position: relative;
+  }
+  .filter-toggle {
+    display: flex;
+    gap: 4px;
+  }
+  .filter-toggle button {
+    font-family: inherit;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .filter-toggle button.active {
+    color: var(--gold);
+    border-color: rgba(246, 201, 69, 0.35);
+    background: var(--panel2);
+  }
+  .filter-toggle button:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
   }
   .wtl {
     display: flex;

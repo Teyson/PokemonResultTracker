@@ -47,3 +47,12 @@ export interface UsersResponse {
   admin: string;
   users: AllowedUserResponse[];
 }
+
+/** One player's season totals for the leaderboard — league nights only, never per-night detail. */
+export interface LeaderboardEntryResponse {
+  login: string;
+  nights: number;
+  w: number;
+  t: number;
+  l: number;
+}

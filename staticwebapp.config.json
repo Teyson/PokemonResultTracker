@@ -7,8 +7,10 @@
     { "route": "/logout", "redirect": "/.auth/logout" },
     { "route": "/admin", "rewrite": "/admin.html" },
     { "route": "/decks", "rewrite": "/decks.html" },
+    { "route": "/leaderboard", "rewrite": "/leaderboard.html" },
     { "route": "/api/nights*", "allowedRoles": ["authenticated"] },
     { "route": "/api/users*", "allowedRoles": ["authenticated"] },
+    { "route": "/api/leaderboard*", "allowedRoles": ["authenticated"] },
     { "route": "/api/me", "allowedRoles": ["authenticated"] }
   ],
   "globalHeaders": {

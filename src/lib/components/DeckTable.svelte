@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
-  import { colorOf, fmtDate, nightlyPpgSeries, ppg } from '$lib/pokemon';
+  import { colorOf, fmtDate, games, nightlyPpgSeries, ppg, scorePct } from '$lib/pokemon';
   import { deckElo, deckRatingTrend } from '$lib/elo';
   import { slide } from 'svelte/transition';
   import TypeIcon from './TypeIcon.svelte';
@@ -132,16 +132,6 @@
 
   function isOpen(id: string, defaultOpen: boolean): boolean {
     return expandedSections.has(id) !== defaultOpen;
-  }
-
-  function games(r: WTL): number {
-    return r.w + r.t + r.l;
-  }
-
-  // Score rate on the same 0-3 ppg scale used everywhere else in the app, expressed as a percent.
-  function scorePct(r: WTL): number | null {
-    const g = games(r);
-    return g ? Math.round(((r.w * 3 + r.t) / (g * 3)) * 100) : null;
   }
 
   type MatchupSortKey = 'name' | 'record' | 'score' | 'ppg';

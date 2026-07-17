@@ -2,9 +2,7 @@
   import '../app.css';
   import { setContext } from 'svelte';
   import { fetchPrincipal } from '$lib/auth';
-  import { DEV_LOGIN_ENABLED, loadDevPrincipal } from '$lib/devAuth';
   import type { ClientPrincipal } from '$lib/types';
-  import DevLoginBar from '$lib/components/DevLoginBar.svelte';
 
   let { children } = $props();
 
@@ -23,14 +21,6 @@
   setContext('auth', auth);
 
   $effect(() => {
-    if (DEV_LOGIN_ENABLED) {
-      const p = loadDevPrincipal();
-      auth.principal = p;
-      auth.isMember = p?.userRoles.includes('member') ?? false;
-      auth.isAdmin = p?.userRoles.includes('admin') ?? false;
-      auth.loading = false;
-      return;
-    }
     fetchPrincipal().then(async (p) => {
       auth.principal = p;
       if (p) {
@@ -52,7 +42,4 @@
   });
 </script>
 
-{#if DEV_LOGIN_ENABLED}
-  <DevLoginBar />
-{/if}
 {@render children()}

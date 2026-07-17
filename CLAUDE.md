@@ -90,10 +90,13 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   `docker compose` subcommand works the same way via that binary.
 - The SWA CLI's emulated login form at `/.auth/login/github` only persists its
   fields on a genuine `keyup` DOM event. Browser automation that sets input
-  values programmatically silently falls back to a cached-or-random user id
-  with no username — it looks like a broken login flow but isn't. When testing
-  role-dependent views locally, prefer the `.env.local` dev-login bar (see
-  README, "Testing the member/admin views") over automating that form.
+  values programmatically (e.g. `form_input`) silently falls back to a
+  cached-or-random user id with no username — it looks like a broken login
+  flow but isn't. When testing role-dependent views locally, click into the
+  User ID/Username fields and use the browser tool's `type` action (real
+  keystrokes) rather than `form_input` — that identity then carries through
+  to `/.auth/me` and every `/api/*` call, so signing in as `ADMIN_GITHUB_LOGIN`
+  gets real admin access against the local database.
 - The user almost always has a `npm run serve` (SWA CLI, `http://localhost:4280`)
   already running locally with real seeded data — check there before starting a
   new one. If it's already up, just use it (e.g. navigate the browser preview to

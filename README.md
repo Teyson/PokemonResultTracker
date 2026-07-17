@@ -313,35 +313,6 @@ For frontend-only iteration without the API or database, `npm run dev` runs
 the Vite dev server directly (`/api/*` calls will 404 unless `swa start` or a
 running Functions host is also available).
 
-### Testing the member/admin views: local dev login
-
-Logging in for real via `/.auth/login/github` (above) is the most accurate way
-to test — it exercises the real API and database. For quicker, lower-fidelity
-iteration on the frontend's own view states (e.g. what the anonymous or
-pending screens look like) without touching the login form or the database,
-there's also a small local-only login bar that lets you pick a role directly:
-
-```powershell
-copy .env.local.example .env.local
-# .env.local is gitignored — never committed, never present in a real deploy
-```
-
-Rebuild (`npm run build`) and reload `npm run serve`. A bar appears at the top
-of every page with **Anonymous** / **Pending** / **Member** / **Admin**
-buttons and a username field — click one and the app immediately renders that
-view, no login flow needed. This is safe to use however you like locally:
-
-- It only fabricates the *frontend's* view of who's signed in. Every
-  `/api/*` call still goes through the real Azure Functions code — nothing
-  about server-side auth changes, so this can't become a real bypass.
-- It's gated by `VITE_LOCAL_DEV_LOGIN`, which only exists in your gitignored
-  `.env.local` — a fresh clone (including the real Azure build) never has it.
-- As a second, independent guard, the bar also refuses to activate anywhere
-  except `localhost`/`127.0.0.1`.
-
-To go back to testing the real CLI login flow only, delete `.env.local` and
-rebuild.
-
 ---
 
 ## Extending it later

@@ -13,7 +13,7 @@
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
-  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import NavMenu from '$lib/components/NavMenu.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -126,25 +126,15 @@
     </div>
   {:else}
     <div class="wrap">
-      <div class="topbar">
-        <span class="who">
-          {#if avatarUrl(auth.principal)}
-            <img class="av" alt="" src={avatarUrl(auth.principal)} />
-          {/if}
-          <span>{auth.principal.userDetails}</span>
-        </span>
-        {#if isAdmin}<a class="tlink admin" href="/admin">Manage users</a>
-          <a class="tlink admin" href="/decks">Manage decks</a>{/if}
-        <a class="tlink" href="/logout">Sign out</a>
-        <ThemeToggle />
-      </div>
-
       <div class="masthead">
-        <PokeBall size={34} />
-        <div>
-          <h1>Pokémon Result Tracker</h1>
-          <div class="sub">casual Pokémon TCG log</div>
-        </div>
+        <a class="brand" href="/">
+          <PokeBall size={34} />
+          <div class="title">
+            <h1>Pokémon Result Tracker</h1>
+            <div class="sub">casual Pokémon TCG log</div>
+          </div>
+        </a>
+        <NavMenu {isAdmin} principal={auth.principal} />
       </div>
 
       <Scoreboard {nights} />
@@ -201,51 +191,29 @@
     margin: 0 auto;
   }
 
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-bottom: 6px;
-    min-height: 22px;
-  }
-  .who {
-    font-size: 11.5px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .who .av {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--panel2);
-    object-fit: cover;
-  }
-  .tlink {
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    text-decoration: none;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 4px 10px;
-  }
-  .tlink:hover {
-    color: var(--text);
-    border-color: var(--muted2);
-  }
-  .tlink.admin {
-    color: var(--gold);
-    border-color: rgba(246, 201, 69, 0.35);
-  }
-
   .masthead {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+  .brand:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .masthead .title {
+    flex: 1;
+    min-width: 0;
   }
   .masthead h1 {
     font-family: var(--display);

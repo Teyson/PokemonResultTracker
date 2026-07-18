@@ -44,6 +44,7 @@
   .hof-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    margin-bottom: 22px;
   }
   .hof {
     display: flex;

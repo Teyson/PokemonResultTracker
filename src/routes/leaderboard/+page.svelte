@@ -39,6 +39,11 @@
   let hallOfFame = $state<{ season: Season; champion: LeaderboardEntry | null }[]>([]);
   let hallOfFameLoaded = $state(false);
 
+  // A single season's table is collapsible (it's one of several season-scoped
+  // sections stacked on the page); the all-time table is the page's own
+  // reason for existing, so it's never collapsed.
+  let tableOpen = $state(true);
+
   $effect(() => {
     if (isMember && !loaded) reload('all');
     if (isMember && !seasonsLoaded) loadSeasons();
@@ -187,36 +192,51 @@
         <SeasonRecap season={selectedSeason} entries={ranked} />
       {/if}
 
-      {#if !loaded}
-        <div class="empty">Loading…</div>
-      {:else if ranked.length === 0}
-        <div class="empty">No league nights logged yet.</div>
-      {:else}
-        <div class="ltable-scroll">
-          <div class="ltable">
-            <div class="lrow head">
-              <span>#</span><span>Player</span><span>Record</span><span>Games</span><span>Pts</span><span>PPG</span
-              ><span>Score%</span>
-            </div>
-            {#each ranked as e, i (e.login)}
-              {@const g = games(e)}
-              {@const p = pts(e)}
-              {@const pct = scorePct(e)}
-              <div class="lrow">
-                <span class="rank" class:gold={i === 0}>{i + 1}</span>
-                <span class="player">
-                  <img class="av" alt="" src={playerAvatarUrl(e.login)} />
-                  <span class="login">{e.login}</span>
-                </span>
-                <span class="mono">{e.w}-{e.t}-{e.l}</span>
-                <span class="mono">{g}</span>
-                <span class="mono">{p}</span>
-                <span class="mono gold">{ppg(e).toFixed(2)}</span>
-                <span class="mono">{pct !== null ? `${pct}%` : '—'}</span>
-              </div>
-            {/each}
-          </div>
+      {#if selectedSeasonId !== 'all'}
+        <div
+          class="section-title toggle"
+          role="button"
+          tabindex="0"
+          onclick={() => (tableOpen = !tableOpen)}
+          onkeydown={(e) => e.key === 'Enter' && (tableOpen = !tableOpen)}
+        >
+          Season leaderboard
+          <span class="chev">{tableOpen ? '▴' : '▾'}</span>
         </div>
+      {/if}
+
+      {#if selectedSeasonId === 'all' || tableOpen}
+        {#if !loaded}
+          <div class="empty">Loading…</div>
+        {:else if ranked.length === 0}
+          <div class="empty">No league nights logged yet.</div>
+        {:else}
+          <div class="ltable-scroll">
+            <div class="ltable">
+              <div class="lrow head">
+                <span>#</span><span>Player</span><span>Record</span><span>Games</span><span>Pts</span><span>PPG</span
+                ><span>Score%</span>
+              </div>
+              {#each ranked as e, i (e.login)}
+                {@const g = games(e)}
+                {@const p = pts(e)}
+                {@const pct = scorePct(e)}
+                <div class="lrow">
+                  <span class="rank" class:gold={i === 0}>{i + 1}</span>
+                  <span class="player">
+                    <img class="av" alt="" src={playerAvatarUrl(e.login)} />
+                    <span class="login">{e.login}</span>
+                  </span>
+                  <span class="mono">{e.w}-{e.t}-{e.l}</span>
+                  <span class="mono">{g}</span>
+                  <span class="mono">{p}</span>
+                  <span class="mono gold">{ppg(e).toFixed(2)}</span>
+                  <span class="mono">{pct !== null ? `${pct}%` : '—'}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -244,6 +264,33 @@
   }
   .season-bar {
     margin-bottom: 10px;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 22px 2px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .section-title.toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .chev {
+    font-size: 11px;
   }
   .ltable-scroll {
     overflow-x: auto;

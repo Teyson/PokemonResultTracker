@@ -1,6 +1,6 @@
 # Feature ideas backlog
 
-Thirty-five well-scoped feature ideas for the Pokémon Result Tracker. This file is written
+Seventy well-scoped feature ideas for the Pokémon Result Tracker. This file is written
 for an implementing agent (or human) picking up **one** idea and building it end-to-end.
 Each idea explains what it is, why it's worth doing, how it maps onto this codebase,
 an effort estimate, and the pitfalls specific to this repo's architecture.
@@ -21,7 +21,7 @@ an effort estimate, and the pitfalls specific to this repo's architecture.
 ## Read this first — repo constraints every idea inherits
 
 These are the facts about this codebase that most often invalidate a naive
-implementation plan. All 35 ideas below assume them.
+implementation plan. All 70 ideas below assume them.
 
 - **Frontend is prerendered static** (`adapter-static`, `prerender = true` in
   `src/routes/+layout.ts`). There is **no SSR at request time**. Consequences:
@@ -1043,6 +1043,1117 @@ in the label), or one lucky three-game season tops the list forever.
 
 ---
 
+## F. The league-administrator role
+
+A third privilege tier between member and admin, for the person actually
+running Tuesday nights. The intended split:
+
+| Capability | Member | League admin | Admin |
+| --- | --- | --- | --- |
+| Log/edit own nights, see leaderboard | ✔ | ✔ | ✔ |
+| Add members to the whitelist | – | ✔ | ✔ |
+| Run league events (section G) | – | ✔ | ✔ |
+| Remove members | – | – | ✔ |
+| Promote/demote league admins | – | – | ✔ |
+| Deck registry mutations, seasons, audit log, deleted-nights restore | – | – | ✔ |
+
+The role system is unusually cheap to extend here: `allowed_users.role` is
+already a free-form `nvarchar(20)` defaulting to `'member'` (`api/src/db/
+schema.ts`), and every handler resolves privileges through one function,
+`resolveRole()` in `api/src/auth.ts`. Ideas 36–38 are deliberately small and
+sequential — 36 is the plumbing, 37 and 38 are the two policy surfaces.
+
+### 36. The `leagueadmin` role tier
+
+**What.** A new `'leagueadmin'` value in `allowed_users.role`, resolved by
+`resolveRole()` into a third flag, visible to the frontend via `/api/me`.
+Pure plumbing — this idea grants no new powers by itself.
+
+**Why.** Foundation for 37, 38, and all of section G. Doing the plumbing as
+its own PR keeps the policy changes (who may do what) reviewable in isolation.
+
+**How.**
+- **No migration needed** — `role` is `nvarchar(20)`; `'leagueadmin'` fits.
+  Update the schema doc comment on `allowedUsers` in the same PR.
+- `api/src/auth.ts`: extend `Role` to `{ isAdmin, isLeagueAdmin, isMember }`.
+  Mapping: `'admin'` → all three true; `'leagueadmin'` → `isLeagueAdmin` +
+  `isMember`; `'member'` → `isMember` only. **The env-var admin branch
+  (ADMIN_USER_ID / ADMIN_GITHUB_LOGIN) must also set `isLeagueAdmin: true`** —
+  admin outranks league admin everywhere, so handlers gate "league admin or
+  better" on `role.isLeagueAdmin` alone, mirroring how `isMember` already
+  includes admins.
+- `api/src/functions/me.ts`: add `isLeagueAdmin` to the response.
+  `src/routes/+layout.svelte`'s `auth` context and `src/lib/auth.ts` mirror it.
+- Types: widen the `'member' | 'admin'` role unions in `api/src/types.ts` and
+  `src/lib/types.ts` (and the cast at `api/src/functions/users.ts:56`).
+- UI: render a "league admin" pill in the `/admin` member list and the
+  `Masthead.svelte` role badge, styled between the existing member/admin looks.
+
+**Effort:** S–M.
+**Pitfalls.** Keep role-string interpretation in exactly one place —
+`resolveRole()` translates strings to flags; handlers only ever read flags.
+Grep for every `isAdmin` check and consciously decide each one: most stay
+admin-only (seasons, decks mutations, audit, `scope=all`/`scope=deleted`);
+nothing should silently widen in this PR.
+
+### 37. Promote & demote league admins (admin-only)
+
+**What.** The admin can promote a member to league admin and demote back,
+from the `/admin` member list. The `'admin'` role itself is never assignable
+via the API — the sole admin stays defined by environment variables.
+
+**Why.** The user-visible half of the role: "Admin should be able to promote
+people to league admin." Explicitly *not* a general role editor — two
+transitions only.
+
+**How.**
+- API: add `PUT /api/users/{id}` to `api/src/functions/users.ts` with body
+  `{ role: z.enum(['member', 'leagueadmin']) }`, gated on `isAdmin`. Refuse
+  to touch rows whose current role is `'admin'` — reuse the exact
+  `role <> 'admin'` guard the DELETE branch already has (`users.ts:108`).
+- Audit: `logAudit(db, caller, 'user.role', 'Promoted <login> to league
+  admin' | 'Demoted <login> to member', context)` — same pattern as
+  `user.add`/`user.remove`.
+- Frontend: in `src/routes/admin/+page.svelte`, a promote/demote action per
+  row (visible only when `auth.isAdmin`), with the same `confirm()` style the
+  remove button uses.
+
+**Effort:** S. **Depends on:** 36.
+**Pitfalls.** Demotion is effective on the target's next API call —
+`resolveRole()` runs per-request with no session cache, so there's nothing to
+invalidate; say so in the PR rather than building invalidation. Return the
+updated row so the UI can update in place.
+
+### 38. League admins add members; role-aware `/admin` page
+
+**What.** League admins can open `/admin`, see the member list, and add
+members — but see no remove buttons, no promote/demote, no deleted-nights
+restore, and no audit log. Server-side, `POST /api/users` opens to league
+admins while everything destructive stays admin-only.
+
+**Why.** The core league-admin privilege: greeting a new player Tuesday night
+and getting them onto the whitelist without pinging the admin — while keeping
+removal and privilege changes centralized.
+
+**How.**
+- API (`users.ts`): replace the single top-of-handler admin gate
+  (`users.ts:41-42`) with per-method gates — GET and POST require
+  `isLeagueAdmin`; DELETE (and 37's PUT) require `isAdmin`. POST keeps
+  hard-coding `role: 'member'` on insert and accepts no role field from the
+  client, so a league admin can never mint privileges; `addedBy` (already
+  recorded) attributes the invite, and the existing `user.add` audit entry
+  covers traceability.
+- `api/src/functions/audit.ts` and `?scope=deleted` in `nights.ts` stay
+  admin-only — league admins don't get the forensic views.
+- Frontend (`admin/+page.svelte`): page gate becomes `isLeagueAdmin ||
+  isAdmin`; the remove/promote controls and the deleted-nights and audit-log
+  cards render only for `isAdmin`. Retitle the page contextually ("League
+  admin" vs "Admin") so league admins don't file bugs about missing cards.
+- `NavMenu.svelte`: show the admin link to league admins too.
+
+**Effort:** M. **Depends on:** 36; **pairs with:** 37.
+**Pitfalls.** Hidden buttons are cosmetics — the 403s are the boundary; test
+by signing into the SWA CLI emulator as a league-admin user (mind the
+real-keystroke login quirk in CLAUDE.md) and hitting DELETE/PUT directly.
+Decide explicitly whether league admins may add someone who was previously
+removed (recommended: yes, it's just an add — the audit log tells the story).
+
+---
+
+## G. Running a league night
+
+Today the app records league nights *after the fact*: each member logs their
+own `nights` row (aggregate W/T/L or per-match). Section G makes the night
+itself a first-class shared thing: a league admin opens an **event**, players
+check in, the app generates Swiss pairings, both players report results **game
+by game as they play**, standings update live, and when the event finishes it
+writes everyone's ordinary personal `nights` rows — so every existing view
+(Scoreboard, DeckTable, matchup matrix, Elo, badges, leaderboard) keeps
+working untouched. Events are a better *entry method*, not a parallel stats
+world.
+
+Two naming/architecture decisions all these ideas share:
+
+- **`nights` stays the personal log; the shared entity is `events`.** Don't
+  overload `nights.isLeagueNight` — that flag keeps meaning "counts for the
+  league" on a personal row. The bridge is idea 50.
+- **No timers, no push** (managed Functions are HTTP-only — see "Read this
+  first"): every "live" behavior is polling (`$effect` + interval refetch
+  while an event is live) and every notification is sent synchronously from
+  the HTTP handler that caused it (54, 65).
+
+**How sanctioned tools do pairings (researched July 2026).** Play! Pokémon
+*mandates* **TOM (Tournament Operations Manager)** — a locally-installed
+Windows app — for sanctioned League Challenges and League Cups; third-party
+software and hand-pairing are explicitly not permitted for those ([support
+article](https://support.pokemon.com/hc/en-us/articles/40087181036948)). (A
+web replacement, PEM, shipped ~2022 and was scrapped; TOM was restored.) TOM
+computes Swiss pairings locally and saves the whole tournament as a **`.tdf`
+file, which is plain XML** — players, pods, rounds, `<match>` elements with
+pairings, outcomes, and table numbers — that organizers upload to the Play!
+Tools web portal to report results. The format is undocumented but has been
+reverse-engineered by community tools (details and sources in idea 51).
+During an event TOM also regenerates `roster.html` / `pairings.html` /
+`standings.html` report files on disk every round for wall displays. Pairing
+rules per the Play! Pokémon tournament handbooks: round 1 fully random;
+later rounds random *within match-point score groups*, avoiding rematches
+where possible, with an odd player paired into the adjacent group; an odd
+attendance gives one player a bye, which counts as a win but is excluded from
+tiebreakers; match points are W/T/L = 3/1/0; tiebreakers are opponents' win %
+then opponents' opponents' win %; League Challenges are best-of-1 (~30-min
+rounds), 3–5 Swiss rounds, no top cut, while Cups add a best-of-3 top cut
+(~50-min). Crucially, **an unsanctioned private league — this app's case —
+is not required to use any of this**: that's why 43 builds pairing into the
+app itself, and 51 covers importing a `.tdf` for the nights someone *does*
+run under TOM.
+
+Dependency spine: **39 → 40 → 43 → 45 → 50** is the minimum path to "run a
+whole night in the app"; everything else in the section hangs off it.
+
+### 39. League events — the shared night entity
+
+**What.** An `events` table and CRUD: a league admin creates "Tuesday
+19 Aug", configures best-of-1 or best-of-3 and round length, and moves it
+through `setup → live → done`. Members see a new `/events` page listing
+upcoming and past events.
+
+**Why.** Foundation of the whole section — pairings, check-in, and live
+reporting all need one shared row to hang off.
+
+**How.**
+- Schema: `events` (`id` identity PK, `name nvarchar(100)` nullable — UI
+  derives "League night 2026-08-19" when absent, `playedOn date not null`,
+  `bestOf int not null default 1`, `roundLengthMin int not null default 30`,
+  `status nvarchar(10) not null default 'setup'` — `'setup' | 'live' |
+  'done'`, `createdBy int` FK → `users.id`, `createdAt`). Generate a
+  migration per CLAUDE.md.
+- API: new `api/src/functions/events.ts` — GET list (member; lean rows) and
+  GET detail `?id=` (member; event + roster + rounds/matches once 40/43
+  exist); POST/PUT/DELETE gated on `isLeagueAdmin`. Status transitions
+  validated in Zod/handler: only `setup→live→done`, and DELETE only while
+  `setup` (after that it has history — see 50).
+- Frontend: `/events` prerendered route + `staticwebapp.config.json` rewrite
+  (the `/admin` → `/admin.html` pattern); event detail on the same route via
+  `?id=` query string — **not** a `[id]` param (prerender constraint).
+- Audit: log `event.create` / `event.finish` via `logAudit` — these are
+  league-admin actions worth a trail.
+
+**Effort:** M–L. **Depends on:** 36 (the role that operates it). Everything
+40–56 depends on this.
+**Pitfalls.** Don't FK events to seasons — derive season membership from
+`playedOn` at read time, exactly like nights (idea 9's no-FK design). Keep the
+GET-detail payload one request (roster + matches included) so the polling
+views (44, 47) are a single fetch.
+
+### 40. Event roster & check-in
+
+**What.** Who's playing tonight. League admins add attendees; members can
+also check themselves in while the event is in `setup`. The roster view shows
+avatars and a live headcount.
+
+**Why.** Pairings need a closed list of tonight's players; check-in is also
+the moment deck registration (42) happens.
+
+**How.**
+- Schema: `event_players` (`id` PK, `eventId int not null` FK → `events.id`,
+  `userId int` nullable FK → `users.id`, `guestName nvarchar(100)` nullable —
+  see 41, `deckId int` nullable FK → `decks.id` — see 42,
+  `droppedAtRound int` nullable — see 48, `createdAt`). Exactly one of
+  `userId`/`guestName` must be set — enforce in the handler/Zod (a DB CHECK
+  constraint is nice-to-have; don't fight the Drizzle rc for it). Unique
+  `(eventId, userId)` so nobody is enrolled twice.
+- API: sub-routes in `events.ts` (`route: 'events/{id}/players/{playerId?}'`
+  or a second function file): POST add (league admin: anyone; member: only
+  themselves — "self check-in"), DELETE un-enroll (league admin, or self
+  while no rounds exist yet).
+- Frontend: roster card on the event detail — avatar (the
+  `github.com/<login>.png` helper `admin/+page.svelte` uses), deck chip once
+  42 lands, headcount, and for league admins an add box with a member picker
+  + guest-name input.
+
+**Effort:** M. **Depends on:** 39.
+**Pitfalls.** Roster membership is visible to all members — same
+visibility class as the leaderboard (#8 settled this; note it in the PR
+anyway). Lock enrollment changes once round 1 exists, except through 48's
+drop/late-entry paths.
+
+### 41. Guest players
+
+**What.** A league night regular who doesn't use the app — or a one-off
+visitor — participates by name only: pairable, beatable, visible in event
+standings, no account.
+
+**Why.** Real league nights always have someone new. If guests can't be
+paired, the whole event feature is unusable the first Tuesday a visitor shows
+up. Precedent already in the codebase: ownerless "reference-only" decks exist
+exactly so opponents outside the app can be modeled (`decks` doc comment).
+
+**How.**
+- Mostly covered by 40's `guestName` column. Guests are created by league
+  admins at check-in (free-text name, dedupe case-insensitively within the
+  event).
+- Guests can't report results; their opponent (45) or the league admin enters
+  them, and confirmation (46) auto-passes for guest matches.
+- "Claim" path: when a guest later becomes a member, an admin can link past
+  `event_players` rows (`UPDATE set userId, guestName = null`) from a small
+  admin UI — history follows them into 57/58. Audit-log it.
+
+**Effort:** S (on top of 40).
+**Pitfalls.** In the bridge (50), guests produce no personal night — but
+their *opponents'* nights still reference the guest's registered deck (42) as
+the opponent deck; use the existing ownerless-deck upsert
+(`upsertOpponentDeck`) so guest decks land in the reference pool, not anyone's
+owned list.
+
+### 42. Deck registration at check-in
+
+**What.** Optionally record what each player is piloting tonight, at check-in
+time — members pick from their own decks (or create one), guests get an
+ownerless reference deck.
+
+**Why.** The quiet payoff: once pairings know both players' decks, the bridge
+(50) fills `opponentDeckId` on everyone's personal matches automatically —
+the matchup matrix (#3) and opponent-type breakdowns stop depending on anyone
+typing their opponent's deck at 22:30. Also what makes standings/pairings
+screens fun to read.
+
+**How.**
+- Schema: 40's `event_players.deckId` (already scoped there).
+- API: accept `deck` + `type` strings on the enroll/check-in call. Members:
+  reuse the owner-scoped upsert (`upsertOwnedDeck`); guests: the ownerless
+  opponent-deck upsert. League admins may set/change anyone's registration
+  while the event is `setup` or `live`.
+- Frontend: deck picker in the check-in flow — reuse `DeckPicker.svelte` /
+  the `NightForm.svelte` chip pattern rather than a new widget.
+
+**Effort:** S–M. **Depends on:** 40.
+**Pitfalls.** Registration is optional at this league's formality level —
+never block pairing on a missing deck. If someone switches decks mid-night
+(it happens at casual league), the registration is "what they mostly played";
+50 copies it as-is — good enough, don't build per-round deck tracking.
+
+### 43. Swiss pairings generator
+
+**What.** One tap on "Pair round N": the app groups tonight's roster by match
+points, pairs randomly within groups avoiding rematches, floats the odd
+player down a group, assigns the bye, numbers the tables, and creates the
+round.
+
+**Why.** The league admin's biggest manual job every single week, and the
+reason leagues otherwise juggle TOM (see the research note above) or paper.
+This is the heart of section G.
+
+**How.**
+- Schema: `event_matches` (`id` PK, `eventId int not null` FK,
+  `roundNo int not null`, `tableNo int`, `playerAId int not null` FK →
+  `event_players.id`, `playerBId int` nullable FK — **null = bye**,
+  `result nvarchar(1)` nullable — `'A' | 'B' | 'T'` from A's perspective,
+  `games nvarchar(10) not null default ''` — see 45,
+  `reportedById int` / `confirmedById int` nullable FKs — see 46,
+  `createdAt`). One migration together with 40's table if built in sequence.
+- Pairing algorithm as a **pure module** `api/src/pairing.ts`:
+  input = players with match points + set of already-played pairs; output =
+  list of `[a, b]` plus optional bye. Group by points descending; shuffle
+  within group; greedily pair avoiding rematches; on dead ends backtrack (at
+  ≤ 16 players a simple recursive backtrack is instant); odd group → float
+  the lowest player down; overall odd count → bye to the lowest-standing
+  player who hasn't had one (Play! convention — see research note). Pure and
+  deterministic given a seeded shuffle, so it's inspectable by hand.
+- API: `POST /api/events/{id}/rounds` (league admin): rejects if the current
+  round has unresolved matches (46), computes pairings, inserts the round's
+  rows in one transaction, stamps the round-start time (49).
+- Frontend: "Pair round N" button on the event detail (league admins,
+  `status='live'`), showing the recommended Swiss round count for the
+  attendance (research note) as guidance, never enforcement.
+
+**Effort:** L — the algorithm is the work; keep it pure and comment the
+rules. **Depends on:** 39, 40.
+**Pitfalls.** Rematch-free perfection is impossible in a tiny league (6
+players, 4 rounds) — when backtracking fails, allow the least-recent rematch
+rather than erroring, and say so in the UI. Never repair a round that has
+results (49/46 flows edit individual matches instead). Transaction around the
+whole round insert.
+
+### 44. Pairings board & "who am I playing"
+
+**What.** The round view: "Table 1 — Alice (2-0) vs Bob (2-0)". Members see
+their own pairing highlighted ("You play Bob — table 3"); guests find their
+name on the board. Refreshes itself while the event is live.
+
+**Why.** Replaces the moment everyone crowds around one phone/laptop. With
+43 this is the visible payoff of the whole feature.
+
+**How.**
+- Frontend-only over 39's GET-detail payload: a `Rounds` section on the event
+  page — round tabs, match rows with avatars, records, table numbers, result
+  chips once reported. Highlight the row whose `userId` matches the signed-in
+  member.
+- Polling: an `$effect`-managed `setInterval` refetch (~15 s) while
+  `status === 'live'` and the tab is visible (`document.visibilityState`) —
+  the no-push constraint, stated in the section intro.
+
+**Effort:** S–M. **Depends on:** 43.
+**Pitfalls.** Clear the interval on unmount/status change (runes cleanup
+callback), or backgrounded phones keep hammering the API all night. Keep the
+poll payload the single GET-detail request from 39 — don't add per-widget
+endpoints.
+
+### 45. Game-by-game live score reporting
+
+**What.** During a match, either player taps the result of each *game* as it
+finishes — G1 win, G2 loss, G3 win — from their own phone. The match result
+derives automatically (first to 2 in Bo3; G1 decides in Bo1; tie when time is
+called on a split). No end-of-night data entry at all on event nights.
+
+**Why.** The user's core ask: scores submitted game by game, not nightly.
+Games are the moment-of-truth unit of a Bo3 league night, and capturing them
+live is also the only way both players stay in sync about the score — the
+classic "wait, was that game 2 or 3?" argument, solved.
+
+**How.**
+- Schema: 43's `event_matches.games` string — chars `'A' | 'B' | 'T'` in
+  play order (same compact-string approach idea 5 scoped for personal
+  matches; at Bo3 scale a string beats a games table).
+- API: `POST /api/events/{eventId}/matches/{matchId}/games` with body
+  `{ gameNo: number, winner: 'me' | 'opponent' | 'tie' }`. Authorization:
+  the caller's `users.id` must be one of the match's two `event_players`
+  (league admins may report any match, and must for guest-vs-guest). The
+  handler translates `me`/`opponent` to `'A'`/`'B'`, and appends **inside a
+  transaction that re-reads the row**: if `games` already has `gameNo`
+  entries or more, return 409 — that makes the call idempotent when both
+  players tap the same game at once (the second tap either agrees silently or
+  surfaces a conflict for 46). Derive and set `result` when decided by
+  `bestOf`; a league-admin-only PUT can overwrite `games`/`result` wholesale
+  to fix mistakes.
+- Frontend: on your highlighted pairing row (44), big thumb-friendly "I won
+  game N" / "Opponent won game N" buttons showing the running score
+  (`W–L`), optimistic update + the existing poll reconciling both phones
+  within seconds.
+- Also works without the generator: if the league admin skipped pairings
+  (casual night), let league admins create an ad-hoc match row between two
+  checked-in players — same reporting flow, no Swiss.
+
+**Effort:** M–L. **Depends on:** 39, 40, 43 (or the ad-hoc path).
+**Relation to idea 5:** the personal `matches.games` column idea 5 scopes is
+the landing spot for this detail when 50 bridges events into nights —
+implement idea 5's schema (validation rules and all) as a prerequisite or as
+part of 50, so game detail survives into personal stats.
+**Pitfalls.** Ties: when time is called mid-game, Play! rules resolve
+unfinished games by their own procedure — don't model it; just allow `'tie'`
+as an outcome and let the humans decide (research note). Never let `result`
+and `games` disagree — result is always derived here (unlike idea 5's
+personal quick-log, where `games` is optional decoration).
+
+### 46. Both-players confirmation & disputes
+
+**What.** A match reported by one player shows "awaiting confirmation" to the
+other, who taps confirm (or corrects). Conflicting reports flag the match;
+the league admin resolves it. Pairing the next round auto-confirms anything
+still pending.
+
+**Why.** Two-source truth without ceremony. The failure mode isn't cheating
+at a friendly league — it's fat fingers, and the flag catches it the same
+minute instead of at standings time.
+
+**How.**
+- 43's `reportedById` / `confirmedById` columns. The games POST (45) sets
+  `reportedById` on first report; a `POST .../confirm` endpoint (opponent
+  only) sets `confirmedById`; a mismatching game report from the opponent
+  (the 409 path in 45) sets a `disputed` state — simplest encoding: a
+  `disputedAt datetime2` nullable column, cleared by the league-admin PUT.
+- 43's round generation refuses while disputes exist, and auto-confirms
+  clean-but-unconfirmed matches as it runs (write `confirmedById = null`
+  but treat pairing as implicit confirmation — or a sentinel; pick one and
+  comment it).
+- Guest matches (41): auto-confirmed on report.
+- UI: pending/confirmed/disputed chips on the pairing row; a league-admin
+  resolve card listing disputed matches.
+
+**Effort:** S–M. **Depends on:** 43, 45.
+**Pitfalls.** Don't block the *reporter's* own next-round pairing on their
+opponent's confirmation laziness — auto-confirm at pairing time is the
+pressure valve that keeps the night moving.
+
+### 47. Live event standings with real tiebreakers
+
+**What.** A standings tab on the event page, updating as results land: match
+points, record, and proper Swiss tiebreakers (opponents' win percentage —
+"resistance" — then opponents' opponents' win percentage), matching how
+sanctioned events rank.
+
+**Why.** "Who's actually winning tonight?" — and the numbers players already
+understand from sanctioned tournaments (research note).
+
+**How.**
+- Pure module `src/lib/eventStandings.ts`, computed client-side from the
+  event GET-detail payload (event data is member-visible anyway): match
+  points (reuse the 3/1/0 scoring constants — export them from
+  `src/lib/pokemon.ts` rather than re-deriving), then opponent win %, with
+  the floor sanctioned rules apply to low win-rates (research note; verify
+  the exact floor value), byes excluded from opponents' win % per convention.
+- Dropped players (48) stay listed, marked, and still count toward their
+  past opponents' resistance.
+- Rendered in the standings tab; frozen naturally once `status='done'`
+  (derived, never snapshotted — same philosophy as season recaps, #33).
+
+**Effort:** M. **Depends on:** 43, 45.
+**Pitfalls.** Tiebreaker math is fiddly and silently-wrong-prone: keep the
+module pure with a worked example in a comment, and hand-check one night
+against TOM's output (or the handbook's example) before trusting it.
+
+### 48. Byes, drops & late entries
+
+**What.** The messy reality of a league night: an odd player count (bye),
+someone leaving after round 2 (drop), and someone arriving during round 1
+(late entry).
+
+**Why.** Without these, the first normal Tuesday breaks the pairing feature —
+these aren't edge cases at a casual league, they're weekly.
+
+**How.**
+- Bye: 43 already models it (`playerBId` null); it auto-resolves as a win for
+  A (`result='A'`, `games` per `bestOf` convention, e.g. `'AA'`), confirmed,
+  at creation time. Never counts as a rematch; a player gets at most one
+  (43's algorithm rule).
+- Drop: `event_players.droppedAtRound` (40's column). League admin (or the
+  player themselves) drops; pairing (43) excludes dropped players; standings
+  (47) keep them, marked "dropped R2".
+- Late entry: allowed while `status='live'` — enrolls normally with 0 points;
+  pairing naturally seats them in the bottom group. Optionally record
+  the missed rounds as nothing at all (simplest, recommended) rather than
+  synthetic losses.
+- All three are league-admin actions on existing endpoints (40/43) — no new
+  function file.
+
+**Effort:** S–M (mostly rules inside 43's module). **Depends on:** 43.
+**Pitfalls.** In the bridge (50), byes should *not* become personal `matches`
+rows (a bye is not a played match and would inflate matchup/Elo data) — but
+the night's W/T/L totals then differ from event match points; pick "played
+matches only" for personal stats and document it in the bridge.
+
+### 49. Round timer
+
+**What.** Pairing a round stamps its start time; every pairings board shows
+the countdown ("18:24 left in round 2") from the event's configured round
+length, flipping to "time!" at zero.
+
+**Why.** The other half of what TOM projects on the wall (research note).
+Zero marginal infrastructure once 43 stamps a timestamp.
+
+**How.**
+- Schema: simplest is `roundStartedAt datetime2` written on the round's
+  matches at creation — or, cleaner, a tiny `event_rounds` table (`eventId`,
+  `roundNo`, `startedAt`) if 43 didn't already create one; either works,
+  pick during 43.
+- Frontend-only otherwise: remaining = `roundLengthMin` − (now −
+  `startedAt`), computed client-side each second; the existing poll (44)
+  delivers the timestamp. League admin gets a "restart clock" action for
+  false starts (PUT updating the timestamp).
+- No sound by default; a subtle visual state change at zero
+  (`prefers-reduced-motion`-safe).
+
+**Effort:** S. **Depends on:** 43/44.
+**Pitfalls.** Client clocks skew — compute against the server timestamp and
+accept ±seconds; label the display approximate rather than chasing sync.
+
+### 50. Event wrap-up — the bridge into personal nights
+
+**What.** Finishing an event writes each member participant's ordinary
+`nights` row for that date automatically: deck from their registration (42),
+one personal `matches` row per played event match (result from their
+perspective, `opponentDeckId` from the opponent's registered deck, game
+string once idea 5's column exists), W/T/L totals recomputed the standard
+way. Guests produce nothing; nobody logs anything by hand.
+
+**Why.** **The keystone of section G.** Every existing feature — Scoreboard,
+DeckTable, matchup matrix (#3), deck Elo (#6), records (#10), badges (#26),
+the leaderboard (#8) — reads `nights`/`matches`. This one handler makes the
+entire event suite feed all of them with zero changes to any of them. Without
+it, events are a stats island.
+
+**How.**
+- Schema: nullable `eventId int` (FK → `events.id`) on `nights`, plus a
+  unique index on `(eventId, ownerId)` where eventId is not null — that's
+  both the provenance marker ("logged from league night") and the idempotency
+  guard making "finish" safe to hit twice.
+- API: inside the `status → 'done'` transition in `events.ts`: for each
+  `event_players` row with a `userId`, build the night (skip byes — see 48 —
+  and unresolved matches shouldn't exist past 46), derive W/T/L from the
+  matches, insert night + matches in a transaction per participant. Reuse the
+  shared deck/night helpers extracted for `nights.ts` rather than duplicating
+  insert logic. `wentFirst` stays null (nobody tracked it live — 45 could add
+  it later as a per-game extra).
+- The created nights belong to the participants (`ownerId`), not the league
+  admin — they can edit/annotate them afterward like any night. If they do,
+  the event remains the source of truth for *event* standings; personal
+  divergence is their business (document this stance).
+- UI: after finishing, the event page links "your night was logged"; the
+  night card in `NightsList.svelte` gets a small league-event badge when
+  `eventId` is set.
+
+**Effort:** M–L. **Depends on:** 39, 40, 42, 43, 45 (and idea 5's column for
+game detail).
+**Pitfalls.** Ownership: `nights.ts`'s POST path is caller-scoped — do these
+inserts directly in the finish handler with explicit `ownerId`, not by
+impersonating. Decide the un-finish story: simplest is "finishing is final;
+fixes go through editing personal nights" — reopening would mean deleting
+generated nights (soft-delete makes this survivable, but don't build it until
+someone asks).
+
+### 51. Import a sanctioned night from TOM (`.tdf` upload)
+
+**What.** When a night is run as a sanctioned League Challenge/Cup, TOM — not
+this app — must be the pairing engine (see the section intro). This idea
+closes the gap: the league admin uploads the event's `.tdf` file, the app
+maps TOM players to members (or guests), and creates the finished event —
+roster, rounds, pairings, results — after which the normal wrap-up (50)
+writes everyone's personal nights. Nobody double-enters a sanctioned night.
+
+**Why.** The answer to "if pairings are made by a Pokémon-sanctioned tool,
+does it output a file we can read?" is **yes**: the `.tdf` is plain XML
+containing exactly the data this section models.
+
+**How.**
+- **Format facts** (verified against a real sample `.tdf` from a community
+  repo, plus working parsers — see references): root
+  `<tournament type stage version gametype mode>`; `<data>` holds the event
+  name, sanction `<id>`, `<startdate>` (**US-format `MM/DD/YYYY`**) and
+  `<roundtime>`; `<players>` holds `<player userid>` (the player's Play!
+  POP ID) with `<firstname>`/`<lastname>`; `<pods>/<pod>/<rounds>/<round
+  number>/<matches>/<match outcome>` holds the pairings — two-player matches
+  carry `<player1 userid>`/`<player2 userid>` and `<tablenumber>`, byes a
+  single `<player>`. A `<standings>` element appears once the tournament is
+  finished (community-observed, not spec'd). **There is no official schema
+  and the `outcome` codes are undocumented** — the sample suggests `2`/`3` =
+  win for slot 1/2, `0` = tie, `5` = bye, but verify against a real file
+  from this league's own TOM before trusting; treat unknown codes as
+  unresolved and surface them in the import UI rather than guessing.
+- API: `POST /api/events/import` (league admin), body = the raw XML
+  (Zod-check size ≤ ~1 MB and root element). Parse server-side with a small
+  XML dependency (e.g. `fast-xml-parser`) — don't regex XML. Two-phase like
+  idea 22's import: a dry-run response lists parsed players with suggested
+  member matches (TOM has real first/last names; members are GitHub logins —
+  matching is fuzzy at best, so it's a *suggestion* UI, not automatic); the
+  league admin maps each player to a member or "guest"; the commit call
+  creates event (+`status='done'`), `event_players`, and `event_matches`
+  in one transaction, then runs 50's bridge.
+- Store each member's TOM `userid` (POP ID) on first mapping (nullable
+  column on `users`) so re-imports auto-map — the mapping chore happens
+  once per player, ever.
+- Dedupe: store the sanction `<id>` as a unique nullable `sanctionId` on
+  `events`; a re-upload of the same file is a 409, not a duplicate night.
+- References for the implementer: `teragoatz/rk10` (Python
+  `ElementTree`-based `.tdf` ingester — the closest prior art),
+  `FomTarro/pkmn-tournament-overlay-tool` (consumes TOM's per-round HTML
+  reports instead), `jlgrimes/swissiwashi` (a TOM-style Swiss/tiebreaker
+  reimplementation for unsanctioned play). There is **no npm/PyPI `.tdf`
+  parser** — this is hand-rolled territory everywhere.
+
+**Effort:** L. **Depends on:** 39, 40, 41 (unmapped players become guests),
+43's schema, 50.
+**Pitfalls.** Sanctioned events are Bo1 with match-level outcomes only — the
+`games` string stays empty on imported matches, and that's correct (don't
+fabricate `'A'` game strings). Parse dates as `MM/DD/YYYY` explicitly. TOM
+splits age divisions into separate pods — flatten all pods into one event but
+keep `roundNo` within-pod, and note the simplification. The importer is the
+one place this app touches an undocumented external format: wrap parsing in
+"reject loudly with a helpful message" rather than best-effort ingestion.
+
+### 52. Top-cut bracket
+
+**What.** After Swiss, an optional single-elimination top cut (top 4/top 8)
+seeded from standings — the League Cup structure — with a bracket view.
+
+**Why.** For special nights (store championship, season finale, #31's
+champion moment). Not weekly fare; deliberately after everything else in the
+spine.
+
+**How.**
+- Schema: `phase nvarchar(10) default 'swiss'` on `event_matches`
+  (`'swiss' | 'topcut'`); bracket position derivable from `roundNo` +
+  `tableNo` ordering, so no new table.
+- API: `POST /api/events/{id}/topcut` (league admin) — validates Swiss
+  complete, seeds 1v4/2v3 (or 1v8… for 8) from 47's standings, creates the
+  first bracket round; subsequent rounds pair winners. Top-cut matches are
+  typically Bo3 even when Swiss was Bo1 — take `bestOf` per phase.
+- Frontend: a bracket layout in the event view (CSS grid; no library).
+- Bridge (50): top-cut matches join the personal night like any other played
+  match.
+
+**Effort:** M–L. **Depends on:** 43, 45, 47.
+**Pitfalls.** Standings must be final before seeding — require all Swiss
+matches confirmed (46). Keep tie handling out: single-elim can't tie; the
+UI just doesn't offer the tie outcome for top-cut matches.
+
+### 53. Scheduled events & RSVP
+
+**What.** Events created with a future date act as a schedule; members RSVP
+("in" / "out" / maybe) and the league admin sees the expected headcount days
+in advance.
+
+**Why.** "Are we enough people to fire a proper night?" is currently a chat
+thread. Headcount also tells the league admin the round count in advance
+(43's guidance).
+
+**How.**
+- Schema: either a `rsvp nvarchar(10)` column on `event_players` (an RSVP
+  is just pre-check-in enrollment) or keep it lighter: reuse `event_players`
+  with a `checkedInAt datetime2` nullable — RSVP'd = row exists, checked in =
+  timestamp set; 43 pairs only checked-in players. The second reading unifies
+  40 and this idea cleanly.
+- API: members POST/PUT/DELETE their own RSVP while `status='setup'` — the
+  self-service path 40 already opens.
+- Frontend: RSVP buttons on upcoming events in `/events`; headcount chips
+  ("6 in · 2 maybe").
+
+**Effort:** S–M. **Depends on:** 39, 40.
+**Pitfalls.** If 40 shipped without `checkedInAt`, add it here and migrate
+meaning carefully — enrolled-but-not-arrived must not get paired (48's
+late-entry path covers stragglers).
+
+### 54. Discord webhook announcements
+
+**What.** The league's Discord channel gets automatic posts: "Round 2
+pairings are up", the standings after the last round, and the event-finished
+recap — sent by the app at the moment the league admin performs the action.
+
+**Why.** The league already lives in a chat app; this meets players where
+they are without anyone screenshotting the pairings board. And it's the one
+"push" mechanism that needs no timers and no push infrastructure — just an
+outbound HTTP POST from the handler that changed the state.
+
+**How.**
+- Config: `discordWebhookUrl` in the `settings` key/value table (#27 scopes
+  it; create it here if 27 hasn't landed) — admin-managed from `/admin`.
+  Server-side only; never returned to any client, league admins included.
+- API: a small `postToDiscord(embed)` helper in `api/src/`, called
+  fire-and-forget (isolated `try/catch`, failure logged, never fails the
+  action — the `logAudit` isolation pattern) from 43's round creation and
+  39's finish transition. Compose embeds server-side: pairings table, top-3
+  standings.
+- No frontend beyond the admin settings card.
+
+**Effort:** S–M. **Depends on:** 39, 43 (the moments worth announcing).
+**Pitfalls.** The webhook URL is a write-capable secret — treat like a
+credential (settings table, not client payloads, not logs). Discord rate
+limits are irrelevant at one league's volume, but keep posts to real moments
+(round up, event done), not every game report.
+
+### 55. Season championship points race
+
+**What.** Each finished event awards placement points (e.g. 1st = 10,
+2nd = 8, 3rd–4th = 6, played = 2 — configurable), and `/leaderboard` gains a
+season race table: points per player across the season's events, alongside
+the existing PPG standings.
+
+**Why.** Mirrors Play!'s Championship Points structure — a season-long race
+where showing up matters, orthogonal to win-rate. Combines the event suite
+with seasons (#9) into the league's meta-game. Strong retention loop, same
+logic as #31.
+
+**How.**
+- No snapshot: derive at read time — events in the season's date range
+  (`playedOn`, the #9 no-FK pattern), each event's placements from 47's
+  standings module, points from a config map (a `settings` JSON value or a
+  constant to start).
+- Where: server-side in `leaderboard.ts` alongside the existing aggregate
+  (it's cross-player but aggregate-only — consistent with that endpoint's
+  privacy stance), or client-side if event detail is member-visible anyway;
+  prefer extending `leaderboard.ts` with an `events` block per entry.
+- Frontend: a second tab/section on `/leaderboard` — "Season race" vs
+  "Standings", both behind the season switcher once #32 lands.
+
+**Effort:** M. **Depends on:** 39, 47; **pairs with:** 9, 31, 32.
+**Pitfalls.** Guests earn placements but have no leaderboard identity — show
+them by guest name in per-event results but exclude from the season race (or
+include by name); decide and label. Derivation means an edited old event
+reshuffles the race — same self-correcting stance as #33.
+
+### 56. Projector & kiosk mode
+
+**What.** A full-screen display view for the shop TV/projector: rotates
+between current pairings, standings, and the round timer in large type,
+auto-refreshing all night.
+
+**Why.** The wall display is half of what TOM provides at sanctioned events
+(research note); a league admin's laptop + HDMI replaces it.
+
+**How.**
+- Frontend-only: `?kiosk=1` on the event detail route — hides nav/chrome,
+  scales type up, cycles panels on a timer (10–15 s), keeps 44's poll
+  running. It runs on a signed-in league admin's machine, so no auth changes.
+- A "start kiosk" button on the event page opens it; `Escape` exits.
+- Public/no-auth variant deliberately out of scope — that's #27's token
+  pattern extended to events, a separate decision.
+
+**Effort:** S–M. **Depends on:** 44, 47, 49.
+**Pitfalls.** Screen-wakelock: request `navigator.wakeLock` (with graceful
+fallback) or the projector sleeps mid-round. `prefers-reduced-motion` for
+the panel transitions.
+
+---
+
+## H. More stats, platform & fun
+
+Standalone ideas — some cash in on section G's shared match data (57–59), the
+rest are independent of it.
+
+### 57. True head-to-head records
+
+**What.** Lifetime player-vs-player records ("you are 7–2 against Bob"),
+derived from event matches where both sides are known members — shown on the
+comparison page (#14) and in a "vs you" chip wherever an opponent's name
+appears.
+
+**Why.** Idea 14 compares two players' *stats side by side*; it can't say who
+beats whom, because personal nights never record the opponent's identity.
+Event matches (43/45) do — this is the first feature only the event world
+makes possible.
+
+**How.**
+- No schema change: aggregate `event_matches` across all events where both
+  `event_players` rows carry a `userId`. Needs an API surface — either
+  include a member's event-match history in the events GET (it's
+  member-visible event data already) or a lean `GET /api/h2h?a=&b=`
+  aggregating server-side; prefer the former (client-side aggregation is the
+  house style).
+- Pure module `src/lib/h2h.ts`; render on `/compare` (#14) and the profile
+  page (59).
+
+**Effort:** S–M. **Depends on:** 39–45 accumulated data; **pairs with:** 14, 59.
+**Pitfalls.** Small-sample bragging — show the record with games count, and
+don't editorialize ("dominates") below ~5 matches.
+
+### 58. Player Elo ratings
+
+**What.** An Elo rating per *player* (distinct from #6's per-deck Elo),
+replayed over all event matches chronologically, shown on the leaderboard and
+profiles.
+
+**Why.** The leaderboard ranks by volume-sensitive totals; Elo ranks by who
+you actually beat. With shared event matches the opponent's identity and
+strength are finally known — this is the rating #6 couldn't be.
+
+**How.**
+- Generalize `src/lib/elo.ts` (#6) — extract the replay core so deck-Elo and
+  player-Elo share it; K=32, start 1000, ties 0.5, same deterministic
+  ordering discipline (event `playedOn`, then event id, `roundNo`, match id).
+  Byes and guest matches move no rating (guests have no stable identity —
+  skip, or rate guests by name; skip is cleaner).
+- Client-side over the same payload as 57; a column on `/leaderboard` and a
+  sparkline on profiles (59).
+
+**Effort:** S–M. **Depends on:** 57's data surface. **Pairs with:** 6, 55.
+**Pitfalls.** Don't blend personal-night matches in (opponent identity is a
+deck there, not a player) — player Elo is event-data-only, say so in the UI.
+
+### 59. Player profile pages
+
+**What.** A page per member — `/player?login=<handle>` — with avatar, badges,
+favorite/most-played decks, form trend, head-to-head vs the viewer (57), Elo
+(58), and event placements (55).
+
+**Why.** The social hub the pieces keep wanting: 14, 55, 57, 58 all need
+somewhere to live. Also the natural click-through from every leaderboard row
+and pairing card.
+
+**How.**
+- Prerendered route with a query string (`?login=`) + the
+  `staticwebapp.config.json` rewrite — the #7 pattern, not `[id]` params.
+- Respect the existing privacy boundary: profiles show what the viewer can
+  already see — leaderboard aggregates, shared event data, badges — and the
+  member's own raw nights only to themselves/admins (i.e. build on existing
+  endpoints; don't widen `scope=all`).
+- Reuse `Badges.svelte`, `Sparkline.svelte`, avatar helper.
+
+**Effort:** M. **Depends on:** pieces above for content; renders gracefully
+with whatever subset exists.
+**Pitfalls.** An empty profile (new member, no events) must look fine —
+design the zero state first.
+
+### 60. Deck lists — PTCGL import/export
+
+**What.** Attach a real 60-card list to a deck, pasted straight from Pokémon
+TCG Live's "Export" (plain-text lines like `4 Charizard ex OBF 125`), rendered
+grouped by Pokémon/Trainer/Energy with counts, and exportable back to
+clipboard in the same format.
+
+**Why.** "What was in that list when it was winning?" — the tracker knows
+results but not builds. PTCGL's text format is the lingua franca players
+already copy around Discord, so entry is one paste.
+
+**How.**
+- Schema: `deck_lists` table (`id`, `deckId` FK → `decks.id`, `content
+  nvarchar(4000) not null`, `createdAt`) — versioned by insert (newest is
+  current), enabling "list as of that night" later without redesign.
+- Parse client-side (a pure `src/lib/decklist.ts`: `count name setCode
+  number` per line, tolerant of the header lines PTCGL emits); store raw text
+  verbatim, render from the parse. Zod on the API just bounds size.
+- API: extend `decks.ts` — GET includes latest list; POST list (deck owner or
+  admin). Frontend: a "List" foldout in the `DeckTable` per-deck detail (#7's
+  home) with paste box + copy button.
+
+**Effort:** M. **Pairs with:** 25 (card images per line via the same proxy),
+61.
+**Pitfalls.** Don't validate legality (60 cards, 4-of rule) as *errors* —
+warn softly; house rules and partial lists exist. `nvarchar(4000)` fits any
+real list; don't reach for `max` types on the rc Drizzle build.
+
+### 61. Archetype identity via card search
+
+**What.** A curated `archetypes` registry — canonical name + a defining card
+(chosen via the pokemontcg.io search, #25's proxy) — that decks can be tagged
+with. Matchup matrix (#3) and deck Elo (#6) aggregate by archetype when tags
+exist, with name-matching as fallback.
+
+**Why.** This is the properly-scoped fix that idea 6's status note explicitly
+deferred: today "Gardevoir" and "Gard/Kirlia" never unify, and per-owner
+decks vs the flat opponent pool is a real modeling conflict. An archetype
+layer *on top of* per-player decks resolves it without forcing shared decks.
+
+**How.**
+- Schema: `archetypes` (`id`, `name nvarchar(100) unique`, `cardId
+  nvarchar(50)`, `imageUrl nvarchar(300)`, `createdAt`); nullable
+  `archetypeId` FK on `decks`.
+- API: CRUD on archetypes (league admin or admin — curation is exactly the
+  league-admin level of trust); deck endpoints accept `archetypeId`.
+- Frontend: tag picker in deck management (#16) and the new-deck flow;
+  aggregation modules (`matchup`, `elo`) key by archetype-else-name.
+
+**Effort:** M–L. **Depends on:** 25's proxy for the card picker (or plain
+text names to start). **Pairs with:** 3, 6, 16.
+**Pitfalls.** Migration of history: retagging old decks re-buckets past
+stats — that's the point, but note recaps/records can shift (same derived-
+data stance as #33). Keep archetype optional forever.
+
+### 62. Prize-count game closeness
+
+**What.** Optionally record how close each game was — the opponent's
+remaining prize cards when it ended (0 = they were about to win, 6 =
+blowout) — surfacing "clutch factor" stats: average margin, blowout rate,
+close-game record.
+
+**Why.** W/L hides whether games were coin-flips or stomps; prizes-left is
+the TCG's native closeness metric and takes one tap to capture at game end.
+
+**How.**
+- Schema: alongside idea 5's `games` string, a parallel optional
+  `prizeMargins nvarchar(20)` on `matches` (comma-separated ints matching
+  `games` positions), and the same on `event_matches` for live capture (45's
+  game-report body gains an optional `opponentPrizesLeft: z.number().int().
+  min(0).max(6)`).
+- Frontend: an optional second row of chips (0–6) on the game-report buttons
+  (45) and the detailed night form; stats in the deck foldout ("avg margin
+  +2.1").
+
+**Effort:** S–M. **Depends on:** 5/45.
+**Pitfalls.** Keep it skippable-by-default — friction here poisons the core
+loop. Validate positions align with `games` length (400 otherwise).
+
+### 63. Shareable night recap
+
+**What.** A "Share" button on any night (or finished event) composing an
+emoji text recap — record, deck, standout stats, standings top-3 for events —
+sent via the Web Share API (native share sheet on phones) with
+copy-to-clipboard fallback.
+
+**Why.** Tuesday's results get retyped into the group chat every week. One
+tap replaces it — and unlike #27's public link, nothing is exposed; it's just
+text the member chooses to paste.
+
+**How.**
+- Frontend-only: pure `src/lib/recap.ts` building the string (reuse `pts`/
+  `ppg`, type emoji); `navigator.share({ text })` when available, else
+  clipboard + toast (`Toast.svelte`).
+- Entry points: night card overflow menu, event-done screen (50), season
+  recap (#33).
+
+**Effort:** S. **Pairs with:** 15, 33, 50.
+**Pitfalls.** `navigator.share` requires a user gesture and https — both
+already true; feature-detect, don't UA-sniff.
+
+### 64. Calendar (iCal) feed of league nights
+
+**What.** A subscribe-able calendar URL — scheduled events (53) as an iCal
+feed phones/Google/Outlook refresh automatically, so "is league on this
+week?" answers itself in everyone's own calendar.
+
+**Why.** RSVP (53) needs people to *remember to open the app*; a calendar
+subscription is passive and native.
+
+**How.**
+- API: `GET /api/calendar?key=<token>` returning `text/calendar` — an
+  **anonymous route** (calendar apps can't do GitHub auth), token-gated
+  exactly like #27: `settings`-table token, `timingSafeEqual`, admin
+  rotate/disable. Emit VEVENTs (name, date, `roundLengthMin`-based estimate)
+  by hand — iCal is simple enough to not need a dependency; mind CRLF line
+  endings and escaping.
+- Feed contains event names/dates/status **only** — no member names, no
+  RSVPs (it's a bearer-token URL that will get forwarded around).
+- Frontend: a "subscribe to calendar" card on `/events` showing the URL.
+
+**Effort:** S–M. **Depends on:** 39/53; token plumbing shared with 27/66.
+**Pitfalls.** Add the `staticwebapp.config.json` `allowedRoles:
+["anonymous"]` route explicitly (same footgun as #27) and test logged-out.
+Calendar apps poll — the payload must never require a warm database-heavy
+path (it's one tiny table; fine).
+
+### 65. Web Push: "pairings are up"
+
+**What.** Opt-in browser push notifications — installed-PWA phones buzz when
+a round is paired ("Round 2: table 5 vs Bob") or an event goes live, even
+with the app closed.
+
+**Why.** The one thing polling (44) can't do is reach a phone in a pocket.
+Web Push needs no paid service — VAPID + the browsers' own push endpoints are
+free, and every send moment is already an HTTP handler (43's round creation),
+which sidesteps the no-timers constraint entirely.
+
+**How.**
+- Schema: `push_subscriptions` (`id`, `userId` FK, `endpoint nvarchar(500)`,
+  `p256dh`/`auth` key columns, `createdAt`); unique on endpoint.
+- API: subscribe/unsubscribe endpoints (member, own rows); the `web-push`
+  npm package in `api/` with VAPID keys in app settings. 43/39 handlers send
+  to affected members fire-and-forget (the 54 isolation pattern), pruning
+  dead subscriptions on 404/410 responses.
+- Frontend: needs the service worker from #24 (PWA) — a notifications toggle
+  in the app requesting permission and posting the subscription.
+
+**Effort:** M–L. **Depends on:** 24 (service worker), 43 (the moment worth
+pushing). **Pairs with:** 54.
+**Pitfalls.** iOS only delivers push to *installed* (home-screen) PWAs —
+say so in the toggle UI. Never send result contents to guests'/others'
+matches — notify a member only about their own pairing.
+
+### 66. Automated off-site backups
+
+**What.** A weekly GitHub Actions cron that pulls a full JSON export and
+stores it outside Azure — the automated version of #22's "data insurance",
+requiring no human to remember.
+
+**Why.** #22 gives a button; buttons don't get pressed. The league's whole
+history lives in one free-tier database — a scheduled copy in a second
+location is the actual backup story.
+
+**How.**
+- Depends on #22's export shape. Auth for a headless caller: a
+  `backupToken` in the `settings` table (the 27/64 token pattern),
+  presented as a header to a dedicated `GET /api/export?format=json`
+  anonymous route that returns the full dump *only* with a valid token
+  (`timingSafeEqual`; 404 otherwise, and the route is useless without it).
+- Workflow: `.github/workflows/backup.yml` on `schedule:` cron — curl with
+  the token from an Actions secret, then commit the dated dump to a private
+  backup repo (or upload as a long-retention artifact; the private-repo
+  option survives artifact expiry). The repo already trusts Actions with
+  production access (the OIDC migration job), so this is in-pattern.
+- Admin card shows last-backup time (the workflow can POST a timestamp back,
+  or just link to the backup repo).
+
+**Effort:** M. **Depends on:** 22.
+**Pitfalls.** The token is full-data-read — Actions secret only, rotate from
+`/admin`, and log each export to the audit log. Don't schedule tighter than
+the data changes (weekly is plenty; the DB also auto-pauses — one wake a week
+is fine).
+
+### 67. Playwright smoke suite
+
+**What.** A minimal end-to-end test suite: boot the SWA CLI emulator against
+the Docker SQL database, sign in as a member, log a night, see it on the
+scoreboard; sign in as admin, add a member. Run locally via `npm run
+test:e2e` and optionally in CI with an MSSQL service container.
+
+**Why.** The verification bar is currently "exercise the flow manually" — 70
+ideas in this file all inherit that cost. A 5-scenario smoke suite is the
+highest-leverage infrastructure idea on the list, and the emulated-login
+quirk (real keystrokes required — CLAUDE.md documents it) is exactly the kind
+of thing tests encode once instead of every session rediscovering.
+
+**How.**
+- Playwright with `webServer` config launching `npm run serve` (built
+  output); tests drive `/.auth/login/github` with real `type()` keystrokes
+  per the CLAUDE.md quirk. Seed/reset the local DB via a small script using
+  the existing Drizzle client before each run.
+- Scenarios: member logs quick night; detailed night with matches; admin
+  adds/removes member; leaderboard renders; (post-36) league admin can add
+  but sees no remove.
+- CI: a separate workflow job with `mcr.microsoft.com/mssql/server` as a
+  service container, migrations applied, then the suite — optional first
+  pass; local-only is already a win.
+
+**Effort:** M–L (chore). **Pairs with:** everything.
+**Pitfalls.** Don't chase full coverage — this is a smoke suite; five stable
+scenarios beat thirty flaky ones. Keep it out of the deploy workflow until
+it's proven non-flaky.
+
+### 68. Deck retirement
+
+**What.** Mark a deck retired: hidden from the deck picker and "what should I
+play" (#29), still present in all historical stats, un-retireable any time.
+
+**Why.** After a year the picker fills with rotated decks; today the only
+cleanups are merge or delete (#16), both wrong for "I just don't play it
+anymore".
+
+**How.**
+- Schema: nullable `retiredAt datetime2` on `decks`.
+- API: set/clear via `decks.ts` PUT — deck owner (their own decks) or admin;
+  GET gains the field.
+- Frontend: "Retire" in the deck manager (#16) and the `DeckTable` foldout;
+  pickers (`DeckPicker`, `NightForm` chips, #29) filter retired by default
+  with a "show retired" reveal.
+
+**Effort:** S.
+**Pitfalls.** Retired ≠ hidden from stats — only *pickers* filter. Opponent-
+deck matching should still find retired decks (the opponent didn't retire it).
+
+### 69. Danish localization
+
+**What.** A language toggle (English/Dansk) covering the app chrome — labels,
+buttons, empty states, toasts — persisted like the theme toggle. Game terms
+(deck names, energy types, W/T/L) stay English.
+
+**Why.** It's a Danish league. Kids and less-English-comfortable players at a
+league night are real users; the app is small enough that this is tractable
+now and only gets more expensive every idea it waits.
+
+**How.**
+- No i18n library: a `src/lib/i18n.svelte.ts` module with a typed dictionary
+  (`t('nights.add')`), an `en`/`da` map, and a `$state` locale persisted to
+  `localStorage` (mirror `ThemeToggle`'s mechanism, including the pre-paint
+  read if any translated text renders before hydration).
+- The work is the audit: sweep every component for literals; dates via
+  `Intl.DateTimeFormat(locale)` replacing hand-rolled `fmtDate` internals.
+- Toggle lives next to `ThemeToggle` in the masthead.
+
+**Effort:** M–L (the sweep, not the mechanism).
+**Pitfalls.** Keep energy types/TYPES keys English internally (they're data,
+matched against stored values) — translate display only. Don't translate
+user content (notes, deck names). Danish strings from the user, not machine
+translation, for the final pass.
+
+### 70. "A year ago this week"
+
+**What.** A small rotating panel: "This week last year: you went 4–0 with
+Gardevoir" / "One year since your first night" — nostalgia pulled from the
+member's own history.
+
+**Why.** Cheap delight in the #10/#26 family, and uniquely a *long-term*
+retention feature: it gets better every week the league keeps logging.
+
+**How.**
+- Frontend-only: pure `src/lib/history.ts` scanning the nights array for
+  same-ISO-week-previous-years highlights (best night, first-ever night,
+  anniversary of a deck's debut), returning at most one line; a dismissible
+  card on the main page. ISO-week math with the same UTC discipline as #12
+  (shared helper).
+- Nothing to show → render nothing (most weeks, year one).
+
+**Effort:** S. **Pairs with:** 10, 12, 26.
+**Pitfalls.** Don't surface bad memories as celebration — pick positive or
+neutral framings only ("first night with X", not "your 0–4").
+
+---
+
 ## Suggested first picks
 
 If you're an agent choosing without further user input, the best
@@ -1065,3 +2176,16 @@ Ideas requiring an explicit product decision from the user before implementing:
 > 33), **#22** export (data insurance, S on its own), **#17** quick-log,
 > **#18** nights filtering, and **#14/#15** now that #8 has settled the
 > visibility question. **#27** still needs its own product decision.
+
+> **Update (July 2026, ideas 36–70):** sections F–H add the league-admin role
+> and the league-night suite. The dependency spine to "run a whole Tuesday in
+> the app" is **36 → 39 → 40 → 43 → 45 → 50** — build in that order, with
+> 37/38 completing the role along the way; nothing in section G is worth
+> starting before 36 and 39 exist. Best standalone picks from the new
+> sections: **#67** (smoke-test suite — pays for itself across every other
+> idea here), **#63** (share recap, S), **#68** (deck retirement, S), **#70**
+> (S). **#51** (TOM `.tdf` import) should wait until the event schema (39–43)
+> has stabilized, and needs empirical verification of the undocumented
+> `outcome` codes. New ideas needing an explicit product decision first:
+> **#64/#66** (new anonymous token-gated endpoints, the #27 class of
+> exposure) and **#54** (posting league data to an external Discord).

@@ -23,6 +23,13 @@
   let entries = $state<LeaderboardEntry[]>([]);
   let bestDeck = $state<BestDeck | null>(null);
   let loaded = $state(false);
+  // Separate from `loaded` on purpose: reload() flips `loaded` back to false
+  // on every call (so mid-switch UI shows a loading state instead of stale
+  // data), and an $effect re-runs whenever anything it reads changes — so
+  // guarding the one-time initial fetch on `!loaded` would re-fire it on
+  // every later season switch too, racing an all-time reload against
+  // whichever season the user actually picked.
+  let initialLoadStarted = $state(false);
 
   let seasonsList = $state<Season[]>([]);
   let seasonsLoaded = $state(false);
@@ -46,7 +53,10 @@
   let tableOpen = $state(true);
 
   $effect(() => {
-    if (isMember && !loaded) reload('all');
+    if (isMember && !initialLoadStarted) {
+      initialLoadStarted = true;
+      reload('all');
+    }
     if (isMember && !seasonsLoaded) loadSeasons();
     if (isMember && !myNightsLoaded) loadMyNights();
   });

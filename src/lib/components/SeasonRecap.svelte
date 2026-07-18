@@ -63,6 +63,7 @@
     border: 1px solid var(--line);
     border-radius: 12px;
     padding: 12px;
+    margin-bottom: 22px;
   }
   .standings {
     display: flex;

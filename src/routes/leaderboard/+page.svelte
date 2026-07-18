@@ -178,19 +178,12 @@
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}
 
-      <HallOfFame entries={hallOfFame} />
-
-      {#if selectedSeason && loaded && myNightsLoaded}
-        <SeasonAwards
-          season={selectedSeason}
-          entries={ranked}
-          nights={myNights}
-          myLogin={auth.principal.userDetails}
-          ended={isEndedSeason}
-        />
+      {#if selectedSeasonId === 'all'}
+        <HallOfFame entries={hallOfFame} />
       {/if}
 
-      {#if selectedSeason && isEndedSeason && loaded}
+      {#if selectedSeason && isEndedSeason && loaded && myNightsLoaded}
+        <SeasonAwards season={selectedSeason} entries={ranked} nights={myNights} myLogin={auth.principal.userDetails} />
         <SeasonRecap season={selectedSeason} entries={ranked} />
       {/if}
 

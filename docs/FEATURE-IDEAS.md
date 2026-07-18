@@ -947,9 +947,10 @@ aggregates server-side for privacy.
 
 > **Status: implemented**, bundled in the same PR as #33 per the user's request.
 > A `src/lib/seasonAwards.ts` (`personalSeasonAwards`) and a new
-> `SeasonAwards.svelte` panel live on `/leaderboard`, shown whenever a specific
-> season (not "All time") is selected in the switcher — labeled "Final" for an
-> ended season, "Provisional" otherwise, per this idea's own pitfall note. It
+> `SeasonAwards.svelte` panel live on `/leaderboard`, shown only when a
+> selected season has **ended** — the user's own call, overriding this idea's
+> original "show a provisional version of the running season too" framing;
+> the running season shows only the live standings table, no awards panel. It
 > shows the champion (from the already-fetched season-scoped leaderboard
 > entries, with a "That's you!"/"You're #N" line), plus three personal
 > stats scoped to league nights only, matching the leaderboard's own scoping:
@@ -1026,9 +1027,10 @@ most-seen control in the app.
 > has ended (final top-3 standings plus league-wide totals — nights logged,
 > games played — both derived at read time from the season-scoped leaderboard
 > entries already fetched for the page, no snapshot). `HallOfFame.svelte`
-> renders unconditionally as a horizontal-scroll strip above the standings,
-> one card per ended season, each fetched via its own
-> `/api/leaderboard?seasonId=` call resolved once seasons load. Per-season
+> renders as a horizontal-scroll strip above the standings only on the
+> "All time" view — the user's own call, so the strip doesn't compete with a
+> single season's own recap/awards — one card per ended season, each fetched
+> via its own `/api/leaderboard?seasonId=` call resolved once seasons load. Per-season
 > "best deck" and "biggest night" were **not** built as league-wide
 > superlatives here — they land in #31's personal awards panel instead (same
 > PR, same page), reusing the viewing member's own nights rather than adding

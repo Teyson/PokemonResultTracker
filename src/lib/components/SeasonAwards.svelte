@@ -3,13 +3,8 @@
   import { fmtDate } from '$lib/pokemon';
   import { personalSeasonAwards } from '$lib/seasonAwards';
 
-  let {
-    season,
-    entries,
-    nights,
-    myLogin,
-    ended
-  }: { season: Season; entries: LeaderboardEntry[]; nights: Night[]; myLogin: string; ended: boolean } = $props();
+  let { season, entries, nights, myLogin }: { season: Season; entries: LeaderboardEntry[]; nights: Night[]; myLogin: string } =
+    $props();
 
   let awards = $derived(personalSeasonAwards(nights, season));
   let champion = $derived(entries[0] ?? null);
@@ -17,10 +12,7 @@
   let myRank = $derived(entries.findIndex((e) => e.login === myLogin) + 1);
 </script>
 
-<div class="section-title">
-  Season awards
-  <span class="tag" class:final={ended}>{ended ? 'Final' : 'Provisional'}</span>
-</div>
+<div class="section-title">Season awards</div>
 <div class="awards">
   <div class="card champion" class:mine={isChampion}>
     <div class="emoji">🏆</div>
@@ -74,20 +66,6 @@
     flex: 1;
     height: 1px;
     background: var(--line);
-  }
-  .tag {
-    font-family: inherit;
-    letter-spacing: normal;
-    text-transform: none;
-    font-size: 10px;
-    color: var(--muted2);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 2px 9px;
-  }
-  .tag.final {
-    color: var(--gold);
-    border-color: rgba(246, 201, 69, 0.35);
   }
   .awards {
     display: grid;

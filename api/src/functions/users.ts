@@ -101,6 +101,18 @@ app.http('users', {
           return { status: 409, jsonBody: { error: `${login} is already on the list.` } };
         }
 
+        // A brand-new login could collide with an existing member's chosen
+        // alias — the reverse direction of the check PUT /api/me does when
+        // someone sets an alias. Catch it here too, or the two members would
+        // render identically everywhere a display name is shown.
+        const aliasCollision = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(sql`LOWER(${users.alias}) = LOWER(${login})`);
+        if (aliasCollision.length) {
+          return { status: 409, jsonBody: { error: `${login} collides with an existing member's display name.` } };
+        }
+
         const addedBy = caller.userDetails ?? null;
         const inserted = await db
           .insert(allowedUsers)

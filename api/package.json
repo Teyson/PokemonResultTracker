@@ -12,7 +12,8 @@
     "db:wait": "node scripts/wait-for-db.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "e2e:reset-db": "node scripts/e2e-reset-db.mjs"
   },
   "dependencies": {
     "@azure/functions": "^4.5.0",

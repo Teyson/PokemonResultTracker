@@ -315,6 +315,17 @@ running Functions host is also available).
 
 ---
 
+## Testing
+
+There is no test suite in the build/PR verification path — see CLAUDE.md's
+verification bar. Optionally, `npm run test:e2e` runs a small Playwright smoke
+suite (sign in, log a night, leaderboard, member management) against its own
+isolated database and ports, so it never touches your regular `npm run serve`
+session. See [e2e/README.md](e2e/README.md) for what it covers and how to
+turn it off or remove it entirely — it's opt-in and self-contained.
+
+---
+
 ## Extending it later
 
 The schema is deliberately relational so it can grow:

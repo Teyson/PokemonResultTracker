@@ -154,6 +154,11 @@ export function currentSeasonId(seasonsList: Season[], todayISO: string): string
   return match ? match.id : null;
 }
 
+/** Seasons that have actually started as of today — the switcher shouldn't offer a season nobody can select results for yet. */
+export function startedSeasons(seasonsList: Season[], todayISO: string): Season[] {
+  return seasonsList.filter((s) => s.startsOn <= todayISO);
+}
+
 function epochDayUTC(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);

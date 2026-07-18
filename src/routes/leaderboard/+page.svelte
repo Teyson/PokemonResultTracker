@@ -4,7 +4,7 @@
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { pts, games, ppg, scorePct, currentSeasonId, todayISO } from '$lib/pokemon';
+  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
@@ -46,6 +46,9 @@
   });
 
   let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  // The switcher only offers seasons that have started — a not-yet-started
+  // season has no standings to show and would just be confusing to pick.
+  let switcherSeasons = $derived(startedSeasons(seasonsList, todayISO()));
 
   async function loadSeasons() {
     try {
@@ -121,7 +124,7 @@
 
       {#if seasonsList.length > 0}
         <div class="season-bar">
-          <SeasonSwitcher seasons={seasonsList} {selectedSeasonId} onSelect={pickSeason} />
+          <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={pickSeason} />
         </div>
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}

@@ -4,7 +4,7 @@
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { nightInSeason, currentSeasonId, todayISO } from '$lib/pokemon';
+  import { nightInSeason, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
@@ -59,6 +59,9 @@
   });
 
   let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  // The switcher only offers seasons that have started — a not-yet-started
+  // season has no nights to show and would just be confusing to pick.
+  let switcherSeasons = $derived(startedSeasons(seasonsList, todayISO()));
   let displayNights = $derived(
     selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
   );
@@ -166,7 +169,7 @@
 
       {#if seasonsList.length > 0}
         <div class="season-bar">
-          <SeasonSwitcher seasons={seasonsList} {selectedSeasonId} onSelect={(id) => (selectedSeasonId = id)} />
+          <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={(id) => (selectedSeasonId = id)} />
         </div>
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}

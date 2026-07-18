@@ -5,6 +5,7 @@ import { getDb } from '../db/client';
 import { users, allowedUsers } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
 import { getUser, resolveRole } from '../auth';
+import { MAX_ALIAS_LENGTH } from '../db/displayName';
 
 /**
  * /api/me — tells the frontend the caller's app-level role, and lets a member
@@ -21,9 +22,12 @@ import { getUser, resolveRole } from '../auth';
  * "authenticated" role. The frontend calls GET instead of reading userRoles
  * to find out if it's looking at a member, an admin, or a signed-in-but-not-
  * yet-whitelisted ("pending") user.
+ *
+ * Real GitHub usernames always take priority over aliases: a login can never
+ * be blocked by an existing alias (see the auto-rename in functions/users.ts)
+ * — but the reverse still holds here, an alias can't be set to something that
+ * collides with an existing login or alias.
  */
-
-const MAX_ALIAS_LENGTH = 50;
 
 // Empty/whitespace-only input clears the alias (alias: null), same as omitting it.
 const aliasInputSchema = z.object({

@@ -1,8 +1,8 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { z } from 'zod';
-import { and, eq, ne, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { users } from '../db/schema';
+import { users, allowedUsers } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
 import { getUser, resolveRole } from '../auth';
 
@@ -38,19 +38,43 @@ type Db = Awaited<ReturnType<typeof getDb>>;
 /**
  * Case-insensitive collision check against every other user's current alias
  * or GitHub login, so a chosen alias can never read as impersonating a real
- * member elsewhere in the app (leaderboard, opponent deck lists, etc.).
+ * member elsewhere in the app (leaderboard, opponent deck lists, etc.). Also
+ * checks pending invites' GitHub logins (allowed_users rows with no users row
+ * yet, since they haven't signed in) and the env-var admin bootstrap login,
+ * so an alias can't squat a name that's about to become someone's real login
+ * either. Excludes the caller's own rows throughout, so setting your alias to
+ * (redundantly) your own login is a no-op, not a false "taken" error.
  */
-async function aliasCollision(db: Db, ownUsersId: number, alias: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(
-      and(
-        ne(users.id, ownUsersId),
-        or(sql`LOWER(${users.alias}) = LOWER(${alias})`, sql`LOWER(${users.githubLogin}) = LOWER(${alias})`)
+async function aliasCollision(db: Db, callerUserId: string, ownUsersId: number, alias: string): Promise<boolean> {
+  const adminLogin = (process.env.ADMIN_GITHUB_LOGIN ?? '').trim();
+  const adminUserId = (process.env.ADMIN_USER_ID ?? '').trim();
+  const callerIsAdminLogin = adminUserId ? adminUserId === callerUserId : false;
+  if (adminLogin && !callerIsAdminLogin && adminLogin.toLowerCase() === alias.toLowerCase()) return true;
+
+  const [userRows, pendingRows] = await Promise.all([
+    db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          ne(users.id, ownUsersId),
+          or(sql`LOWER(${users.alias}) = LOWER(${alias})`, sql`LOWER(${users.githubLogin}) = LOWER(${alias})`)
+        )
+      ),
+    db
+      .select({ id: allowedUsers.id })
+      .from(allowedUsers)
+      .where(
+        and(
+          // NULL userId (not-yet-signed-in invite) is never "the caller" —
+          // ne() alone would silently exclude those rows under SQL's
+          // three-valued NULL logic, defeating the whole point of this check.
+          or(isNull(allowedUsers.userId), ne(allowedUsers.userId, callerUserId)),
+          sql`LOWER(${allowedUsers.githubLogin}) = LOWER(${alias})`
+        )
       )
-    );
-  return rows.length > 0;
+  ]);
+  return userRows.length > 0 || pendingRows.length > 0;
 }
 
 app.http('me', {
@@ -90,7 +114,7 @@ app.http('me', {
 
     const ownUsersId = await ensureUser(db, user.userId, user.userDetails);
     const alias = parsed.data.alias;
-    if (alias !== null && (await aliasCollision(db, ownUsersId, alias))) {
+    if (alias !== null && (await aliasCollision(db, user.userId, ownUsersId, alias))) {
       return { status: 409, jsonBody: { error: 'That alias is already taken.' } };
     }
     await db.update(users).set({ alias }).where(eq(users.id, ownUsersId));

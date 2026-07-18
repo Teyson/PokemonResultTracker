@@ -1,23 +1,28 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
-import { and, eq, isNull, count, sum } from 'drizzle-orm';
+import { and, eq, gte, lte, isNull, count, sum } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { nights, users } from '../db/schema';
+import { nights, seasons, users } from '../db/schema';
 import { getUser, resolveRole } from '../auth';
 import type { LeaderboardEntryResponse } from '../types';
 
 /**
  * /api/leaderboard — season standings across the whole league.
  *
- *   GET /api/leaderboard -> LeaderboardEntryResponse[], one row per player who has
- *                           logged at least one league night, totals aggregated
- *                           server-side (never raw per-night data — decks, dates
- *                           and notes stay private to their owner; only the season
- *                           W/T/L totals are shared).
+ *   GET /api/leaderboard              -> LeaderboardEntryResponse[], all-time totals
+ *   GET /api/leaderboard?seasonId=<id> -> same shape, scoped to that season's date range
+ *
+ * One row per player who has logged at least one league night in the scope,
+ * totals aggregated server-side (never raw per-night data — decks, dates and
+ * notes stay private to their owner; only the W/T/L totals are shared).
  *
  * Scoped to league nights only (is_league_night = 1) — casual nights never affect
  * standings. Unlike GET /api/nights (own-nights-only unless an admin passes
  * scope=all), this is open to every member: seeing where you rank against the
  * rest of the league is the point of the feature.
+ *
+ * The seasonId filter is applied server-side (on played_on, before aggregating)
+ * rather than client-side, so the privacy boundary — members only ever see
+ * aggregate totals, never raw nights — holds for season views too.
  */
 app.http('leaderboard', {
   methods: ['GET'],
@@ -32,6 +37,18 @@ app.http('leaderboard', {
       const { isMember } = await resolveRole(db, user.userId, user.userDetails, context);
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
+      const seasonIdParam = request.query.get('seasonId');
+      let seasonRange: { startsOn: string; endsOn: string | null } | undefined;
+      if (seasonIdParam !== null) {
+        const seasonId = Number(seasonIdParam);
+        if (!Number.isInteger(seasonId)) return { status: 400, jsonBody: { error: 'Invalid seasonId.' } };
+        const found = (
+          await db.select({ startsOn: seasons.startsOn, endsOn: seasons.endsOn }).from(seasons).where(eq(seasons.id, seasonId))
+        )[0];
+        if (!found) return { status: 404, jsonBody: { error: 'Season not found.' } };
+        seasonRange = found;
+      }
+
       const rows = await db
         .select({
           login: users.githubLogin,
@@ -42,7 +59,14 @@ app.http('leaderboard', {
         })
         .from(nights)
         .innerJoin(users, eq(users.id, nights.ownerId))
-        .where(and(eq(nights.isLeagueNight, true), isNull(nights.deletedAt)))
+        .where(
+          and(
+            eq(nights.isLeagueNight, true),
+            isNull(nights.deletedAt),
+            seasonRange ? gte(nights.playedOn, seasonRange.startsOn) : undefined,
+            seasonRange?.endsOn ? lte(nights.playedOn, seasonRange.endsOn) : undefined
+          )
+        )
         .groupBy(users.githubLogin);
 
       // SUM() is typed nullable in general (no matching rows), but every row here came from

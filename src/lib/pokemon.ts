@@ -153,3 +153,47 @@ export function currentSeasonId(seasonsList: Season[], todayISO: string): string
   const match = seasonsList.find((s) => todayISO >= s.startsOn && (!s.endsOn || todayISO <= s.endsOn));
   return match ? match.id : null;
 }
+
+function epochDayUTC(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+}
+
+export interface SeasonProgress {
+  /** 1-based week number, counting Tuesday-aligned weeks from the season's start. */
+  weekNumber: number;
+  /** Total Tuesday-aligned weeks in the season, or null when open-ended (no endsOn). */
+  totalWeeks: number | null;
+  /** True once totalWeeks - weekNumber <= 2 (the final stretch of a bounded season). */
+  isFinalStretch: boolean;
+  /** Weeks remaining after the current one, only meaningful when totalWeeks is set. */
+  weeksLeft: number | null;
+}
+
+/**
+ * Where a season stands today, counted in Tuesday-aligned weeks (the league's
+ * weekly cadence) rather than raw calendar days, so "week 6" lines up with six
+ * Tuesdays played, not a fractional day count. Dates are folded to their
+ * nearest Tuesday the same way the attendance heatmap (#12) does, so the two
+ * stay consistent — share nearestTuesday rather than duplicating the math.
+ */
+export function seasonProgress(season: Season, todayISO: string): SeasonProgress {
+  const startWeek = epochDayUTC(nearestTuesday(season.startsOn));
+  const todayWeek = epochDayUTC(nearestTuesday(todayISO < season.startsOn ? season.startsOn : todayISO));
+  const weekNumber = Math.round((todayWeek - startWeek) / 7) + 1;
+
+  let totalWeeks: number | null = null;
+  let weeksLeft: number | null = null;
+  if (season.endsOn) {
+    const endWeek = epochDayUTC(nearestTuesday(season.endsOn));
+    totalWeeks = Math.round((endWeek - startWeek) / 7) + 1;
+    weeksLeft = Math.max(totalWeeks - weekNumber, 0);
+  }
+
+  return {
+    weekNumber,
+    totalWeeks,
+    isFinalStretch: totalWeeks !== null && totalWeeks - weekNumber <= 2,
+    weeksLeft
+  };
+}

@@ -949,6 +949,14 @@ retention loop: every season, everyone starts from zero again.
 
 ### 32. Season-scoped leaderboard
 
+> **Status: implemented**, bundled in the same PR as #34 per the user's request.
+> The season pill + overflow-dropdown switcher was extracted from the main page
+> into `src/lib/components/SeasonSwitcher.svelte` and reused on both pages,
+> exactly as scoped. `GET /api/leaderboard` takes an optional `?seasonId=`,
+> looks up that season's date range, and filters `nights.played_on` in SQL
+> before aggregating — an unknown id 404s. No `seasonId` keeps the prior
+> all-time behavior, so the endpoint is backward compatible.
+
 **What.** The same season switcher the main page has, on `/leaderboard`:
 defaults to the current season, past seasons selectable, "All time" still
 available.
@@ -997,6 +1005,17 @@ night is edited or deleted — at this scale that's self-correcting, not a bug,
 but don't cache or snapshot recap results anywhere.
 
 ### 34. Season progress header
+
+> **Status: implemented**, bundled in the same PR as #32 per the user's request.
+> A `seasonProgress()` helper in `src/lib/pokemon.ts` counts Tuesday-aligned
+> weeks (sharing `nearestTuesday` with #12) and a new
+> `src/lib/components/SeasonProgress.svelte` renders the one-line strip below
+> the switcher on both the main page and `/leaderboard`, reflecting whichever
+> season is selected (not only the current one). Shows a "final week"/"N weeks
+> left" countdown in a bounded season's last two weeks instead of "ends
+> <date>", and an "off-season" hint when "All time" is selected but no season
+> covers today. The calendar-heatmap boundary markers mentioned as optional in
+> the original scoping were left out.
 
 **What.** A one-line context strip next to the season switcher: "Spring 2026 ·
 week 6 of 13 · ends Jun 30", shifting to a countdown tone in the final weeks,

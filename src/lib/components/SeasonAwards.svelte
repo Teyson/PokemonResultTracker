@@ -28,6 +28,8 @@
     }
     return best;
   });
+  let isMostAttended = $derived(mostAttended !== null && mostAttended.login === myLogin);
+  let isBestDeckOwner = $derived(bestDeck !== null && bestDeck.ownerLogin === myLogin);
 </script>
 
 <div class="section-title toggle" role="button" tabindex="0" onclick={() => (open = !open)} onkeydown={(e) => e.key === 'Enter' && (open = !open)}>
@@ -36,7 +38,7 @@
 </div>
 {#if open}
   <div class="awards" transition:slide={{ duration: 220 }}>
-    <div class="card champion" class:mine={isChampion}>
+    <div class="card" class:mine={isChampion}>
       <div class="emoji">🏆</div>
       <div class="v name">{champion ? champion.login : '—'}</div>
       <div class="k">Champion</div>
@@ -51,17 +53,23 @@
       {/if}
     </div>
     {#if mostAttended}
-      <div class="card">
+      <div class="card" class:mine={isMostAttended}>
         <div class="v name">{mostAttended.login}</div>
         <div class="k">Most nights attended</div>
         <div class="sub">{mostAttended.nights} night{mostAttended.nights === 1 ? '' : 's'}</div>
+        {#if isMostAttended}
+          <div class="sub gold">That's you!</div>
+        {/if}
       </div>
     {/if}
     {#if bestDeck}
-      <div class="card">
+      <div class="card" class:mine={isBestDeckOwner}>
         <div class="v gold">{ppg(bestDeck).toFixed(2)}</div>
         <div class="k">Best deck</div>
         <div class="sub">{bestDeck.deck} · {bestDeck.ownerLogin} · {bestDeck.w}-{bestDeck.t}-{bestDeck.l}</div>
+        {#if isBestDeckOwner}
+          <div class="sub gold">That's you!</div>
+        {/if}
       </div>
     {/if}
     <div class="card">
@@ -126,7 +134,7 @@
     padding: 12px 10px;
     text-align: center;
   }
-  .card.champion.mine {
+  .card.mine {
     border-color: rgba(246, 201, 69, 0.35);
   }
   .emoji {

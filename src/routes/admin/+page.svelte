@@ -5,7 +5,7 @@
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
-  import NavMenu from '$lib/components/NavMenu.svelte';
+  import Masthead from '$lib/components/Masthead.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -169,10 +169,8 @@
     </div>
   {:else}
     <div class="wrap">
-      <div class="header">
-        <h1>League members</h1>
-        <NavMenu {isAdmin} principal={auth.principal} />
-      </div>
+      <Masthead {isAdmin} principal={auth.principal} />
+      <h2>League members</h2>
       <div class="sub">
         Whitelist who can sign in and log nights. People sign in with GitHub first, then you add their username here
         — they get access the next time they load the page.
@@ -311,22 +309,15 @@
 
 <style>
   .wrap {
-    max-width: 560px;
+    max-width: 680px;
     margin: 0 auto;
   }
-  .header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  h1 {
+  h2 {
     font-family: var(--display);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-size: 20px;
-    margin: 0;
+    margin: 0 0 14px;
   }
   .sub {
     color: var(--muted);

@@ -14,7 +14,7 @@
   import NightsList from '$lib/components/NightsList.svelte';
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
-  import NavMenu from '$lib/components/NavMenu.svelte';
+  import Masthead from '$lib/components/Masthead.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -186,16 +186,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <div class="masthead">
-        <a class="brand" href="/">
-          <PokeBall size={34} />
-          <div class="title">
-            <h1>Pokémon Result Tracker</h1>
-            <div class="sub">casual Pokémon TCG log</div>
-          </div>
-        </a>
-        <NavMenu {isAdmin} principal={auth.principal} />
-      </div>
+      <Masthead {isAdmin} principal={auth.principal} />
 
       {#if seasonsList.length > 0}
         <div class="season-switcher" bind:this={seasonSwitcherEl}>
@@ -281,46 +272,6 @@
   .wrap {
     max-width: 680px;
     margin: 0 auto;
-  }
-
-  .masthead {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-    min-width: 0;
-    color: inherit;
-    text-decoration: none;
-  }
-  .brand:focus-visible {
-    outline: 2px solid var(--text);
-    outline-offset: 2px;
-    border-radius: 6px;
-  }
-  .masthead .title {
-    flex: 1;
-    min-width: 0;
-  }
-  .masthead h1 {
-    font-family: var(--display);
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    font-size: 22px;
-    margin: 0;
-    line-height: 1;
-  }
-  .masthead .sub {
-    color: var(--muted);
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    margin-top: 3px;
   }
 
   .season-switcher {
@@ -529,11 +480,5 @@
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
-  }
-
-  @media (max-width: 440px) {
-    .masthead h1 {
-      font-size: 19px;
-    }
   }
 </style>

@@ -117,17 +117,34 @@
     reload(id);
   }
 
+  // Bumped on every reload() call so an in-flight request can tell whether
+  // it's been superseded by a newer one before touching state — without this,
+  // quickly picking two seasons in a row can let the first (now-stale) request
+  // resolve after the second and silently overwrite the correct data, since
+  // network responses aren't guaranteed to arrive in request order.
+  let reloadToken = 0;
+
   // seasonId is passed explicitly (rather than read from selectedSeasonId)
   // so callers control exactly which scope a given fetch requests, since
   // this runs both from effects and direct user picks.
   async function reload(seasonId: string | 'all') {
+    const token = ++reloadToken;
+    // Reset before the fetch, not after — otherwise the previous scope's
+    // entries (and loaded=true) linger during the round-trip and briefly
+    // render under the newly-selected season's heading.
+    loaded = false;
     try {
       const query = seasonId !== 'all' ? `?seasonId=${encodeURIComponent(seasonId)}` : '';
       const res = await api<Leaderboard>(`/api/leaderboard${query}`);
+      if (token !== reloadToken) return; // superseded by a later pick — discard
       entries = res?.entries ?? [];
       bestDeck = res?.bestDeck ?? null;
       loaded = true;
     } catch (e) {
+      if (token !== reloadToken) return;
+      entries = [];
+      bestDeck = null;
+      loaded = true;
       toast(`Could not load the leaderboard: ${(e as Error).message}`, true);
     }
   }

@@ -1,13 +1,15 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, LeaderboardEntry } from '$lib/types';
+  import type { ClientPrincipal, LeaderboardEntry, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { pts, games, ppg, scorePct } from '$lib/pokemon';
+  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
+  import SeasonSwitcher from '$lib/components/SeasonSwitcher.svelte';
+  import SeasonProgress from '$lib/components/SeasonProgress.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -18,13 +20,57 @@
   let entries = $state<LeaderboardEntry[]>([]);
   let loaded = $state(false);
 
+  let seasonsList = $state<Season[]>([]);
+  let seasonsLoaded = $state(false);
+  let selectedSeasonId = $state<string | 'all'>('all');
+  let seasonDefaulted = $state(false);
+
   $effect(() => {
-    if (isMember && !loaded) reload();
+    if (isMember && !loaded) reload('all');
+    if (isMember && !seasonsLoaded) loadSeasons();
   });
 
-  async function reload() {
+  // Auto-select the current season only once, the first time seasons finish
+  // loading, mirroring the main page's switcher default — then re-fetch the
+  // leaderboard scoped to it (the 'all' load above already covered the
+  // no-current-season case, so this only reloads when a season is found).
+  $effect(() => {
+    if (seasonsLoaded && !seasonDefaulted) {
+      seasonDefaulted = true;
+      const id = currentSeasonId(seasonsList, todayISO());
+      if (id) {
+        selectedSeasonId = id;
+        reload(id);
+      }
+    }
+  });
+
+  let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  // The switcher only offers seasons that have started — a not-yet-started
+  // season has no standings to show and would just be confusing to pick.
+  let switcherSeasons = $derived(startedSeasons(seasonsList, todayISO()));
+
+  async function loadSeasons() {
     try {
-      entries = (await api<LeaderboardEntry[]>('/api/leaderboard')) ?? [];
+      seasonsList = (await api<Season[]>('/api/seasons')) ?? [];
+      seasonsLoaded = true;
+    } catch (e) {
+      toast(`Could not load seasons: ${(e as Error).message}`, true);
+    }
+  }
+
+  function pickSeason(id: string | 'all') {
+    selectedSeasonId = id;
+    reload(id);
+  }
+
+  // seasonId is passed explicitly (rather than read from selectedSeasonId)
+  // so callers control exactly which scope a given fetch requests, since
+  // this runs both from effects and direct user picks.
+  async function reload(seasonId: string | 'all') {
+    try {
+      const query = seasonId !== 'all' ? `?seasonId=${encodeURIComponent(seasonId)}` : '';
+      entries = (await api<LeaderboardEntry[]>(`/api/leaderboard${query}`)) ?? [];
       loaded = true;
     } catch (e) {
       toast(`Could not load the leaderboard: ${(e as Error).message}`, true);
@@ -72,9 +118,16 @@
       <Masthead {isAdmin} principal={auth.principal} />
       <h2>League leaderboard</h2>
       <div class="sub">
-        Season standings for league nights only — casual nights don't count here. Ranked by points, ties broken by
-        fewer games played.
+        Standings for league nights only — casual nights don't count here. Ranked by points, ties broken by fewer
+        games played.
       </div>
+
+      {#if seasonsList.length > 0}
+        <div class="season-bar">
+          <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={pickSeason} />
+        </div>
+        <SeasonProgress seasons={seasonsList} {selectedSeason} />
+      {/if}
 
       {#if !loaded}
         <div class="empty">Loading…</div>
@@ -130,6 +183,9 @@
     font-size: 12.5px;
     margin-bottom: 20px;
     line-height: 1.5;
+  }
+  .season-bar {
+    margin-bottom: 10px;
   }
   .ltable-scroll {
     overflow-x: auto;

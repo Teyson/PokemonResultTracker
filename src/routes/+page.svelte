@@ -4,7 +4,7 @@
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { nightInSeason, currentSeasonId, todayISO } from '$lib/pokemon';
+  import { nightInSeason, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
@@ -15,6 +15,8 @@
   import DeckTable from '$lib/components/DeckTable.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
+  import SeasonSwitcher from '$lib/components/SeasonSwitcher.svelte';
+  import SeasonProgress from '$lib/components/SeasonProgress.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -34,13 +36,6 @@
   let seasonsLoaded = $state(false);
   let selectedSeasonId = $state<string | 'all'>('all');
   let seasonDefaulted = $state(false);
-  let moreSeasonsOpen = $state(false);
-  let seasonSwitcherEl: HTMLDivElement | undefined = $state();
-
-  // Keep the pill row from growing without bound as seasons accumulate over
-  // the years — only the most recent few are always-visible pills; older ones
-  // live behind a "More" dropdown instead of wrapping into extra rows.
-  const VISIBLE_SEASON_COUNT = 3;
 
   $effect(() => {
     if (isMember && !nightsLoaded) {
@@ -64,26 +59,12 @@
   });
 
   let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
+  // The switcher only offers seasons that have started — a not-yet-started
+  // season has no nights to show and would just be confusing to pick.
+  let switcherSeasons = $derived(startedSeasons(seasonsList, todayISO()));
   let displayNights = $derived(
     selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
   );
-
-  let visibleSeasons = $derived(seasonsList.slice(0, VISIBLE_SEASON_COUNT));
-  let overflowSeasons = $derived(seasonsList.slice(VISIBLE_SEASON_COUNT));
-  let selectedIsOverflow = $derived(overflowSeasons.some((s) => s.id === selectedSeasonId));
-
-  function pickSeason(id: string | 'all') {
-    selectedSeasonId = id;
-    moreSeasonsOpen = false;
-  }
-
-  function onSeasonSwitcherDocClick(e: MouseEvent) {
-    if (moreSeasonsOpen && seasonSwitcherEl && !seasonSwitcherEl.contains(e.target as Node)) moreSeasonsOpen = false;
-  }
-
-  function onSeasonSwitcherKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') moreSeasonsOpen = false;
-  }
 
   async function loadNights() {
     try {
@@ -158,8 +139,6 @@
   <title>Pokémon Result Tracker</title>
 </svelte:head>
 
-<svelte:window onclick={onSeasonSwitcherDocClick} onkeydown={onSeasonSwitcherKeydown} />
-
 {#if !auth.loading}
   {#if !auth.principal}
     <div class="gate">
@@ -189,35 +168,10 @@
       <Masthead {isAdmin} principal={auth.principal} />
 
       {#if seasonsList.length > 0}
-        <div class="season-switcher" bind:this={seasonSwitcherEl}>
-          <button class="pill" class:active={selectedSeasonId === 'all'} onclick={() => pickSeason('all')}>All time</button>
-          {#each visibleSeasons as s (s.id)}
-            <button class="pill" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}>{s.name}</button>
-          {/each}
-          {#if overflowSeasons.length > 0}
-            <div class="more-wrap">
-              <button
-                class="pill more-trigger"
-                class:active={selectedIsOverflow}
-                aria-haspopup="true"
-                aria-expanded={moreSeasonsOpen}
-                onclick={() => (moreSeasonsOpen = !moreSeasonsOpen)}
-              >
-                {selectedIsOverflow ? selectedSeason?.name : 'More'}
-                <span class="chev-sm">▾</span>
-              </button>
-              {#if moreSeasonsOpen}
-                <div class="more-menu">
-                  {#each overflowSeasons as s (s.id)}
-                    <button class="more-item" class:active={selectedSeasonId === s.id} onclick={() => pickSeason(s.id)}
-                      >{s.name}</button
-                    >
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/if}
+        <div class="season-bar">
+          <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={(id) => (selectedSeasonId = id)} />
         </div>
+        <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}
 
       <Scoreboard nights={displayNights} />
@@ -274,83 +228,8 @@
     margin: 0 auto;
   }
 
-  .season-switcher {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 16px;
-  }
-  .season-switcher .pill {
-    flex: 0 0 auto;
-    font-family: inherit;
-    font-size: 11.5px;
-    letter-spacing: 0.02em;
-    color: var(--muted);
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 5px 13px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .season-switcher .pill.active {
-    color: var(--text);
-    border-color: var(--muted2);
-    background: var(--panel2);
-  }
-  .more-wrap {
-    position: relative;
-    flex: 0 0 auto;
-  }
-  .more-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .chev-sm {
-    font-size: 8px;
-    color: var(--muted2);
-    line-height: 1;
-    transition: transform 0.15s;
-  }
-  .more-trigger[aria-expanded='true'] .chev-sm {
-    transform: rotate(180deg);
-  }
-  .more-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    max-height: 260px;
-    overflow-y: auto;
-    min-width: 160px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 6px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  }
-  .more-item {
-    font-family: inherit;
-    font-size: 12.5px;
-    color: var(--text);
-    text-decoration: none;
-    border: none;
-    background: transparent;
-    border-radius: 7px;
-    padding: 8px 10px;
-    white-space: nowrap;
-    text-align: left;
-    cursor: pointer;
-  }
-  .more-item:hover {
-    background: var(--panel2);
-  }
-  .more-item.active {
-    color: var(--gold);
+  .season-bar {
+    margin-bottom: 10px;
   }
 
   .section-title {

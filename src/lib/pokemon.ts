@@ -179,7 +179,12 @@ export interface SeasonProgress {
  */
 export function seasonProgress(season: Season, todayISO: string): SeasonProgress {
   const startWeek = epochDayUTC(nearestTuesday(season.startsOn));
-  const todayWeek = epochDayUTC(nearestTuesday(todayISO < season.startsOn ? season.startsOn : todayISO));
+  // Clamp to the season's own range: before it starts, freeze at week 1; after
+  // an ended season's endsOn, freeze at its final week rather than counting
+  // past it forever.
+  const clampedToday =
+    todayISO < season.startsOn ? season.startsOn : season.endsOn && todayISO > season.endsOn ? season.endsOn : todayISO;
+  const todayWeek = epochDayUTC(nearestTuesday(clampedToday));
   const weekNumber = Math.round((todayWeek - startWeek) / 7) + 1;
 
   let totalWeeks: number | null = null;

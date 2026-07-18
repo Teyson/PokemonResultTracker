@@ -1,15 +1,18 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, LeaderboardEntry, Season } from '$lib/types';
+  import type { ClientPrincipal, LeaderboardEntry, Leaderboard, BestDeck, Night, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
+  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO, rankLeaderboard } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
   import SeasonSwitcher from '$lib/components/SeasonSwitcher.svelte';
   import SeasonProgress from '$lib/components/SeasonProgress.svelte';
+  import SeasonAwards from '$lib/components/SeasonAwards.svelte';
+  import SeasonRecap from '$lib/components/SeasonRecap.svelte';
+  import HallOfFame from '$lib/components/HallOfFame.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -18,16 +21,48 @@
   let isAdmin = $derived(auth.isAdmin);
 
   let entries = $state<LeaderboardEntry[]>([]);
+  let bestDeck = $state<BestDeck | null>(null);
   let loaded = $state(false);
+  // Separate from `loaded` on purpose: reload() flips `loaded` back to false
+  // on every call (so mid-switch UI shows a loading state instead of stale
+  // data), and an $effect re-runs whenever anything it reads changes — so
+  // guarding the one-time initial fetch on `!loaded` would re-fire it on
+  // every later season switch too, racing an all-time reload against
+  // whichever season the user actually picked.
+  let initialLoadStarted = $state(false);
 
   let seasonsList = $state<Season[]>([]);
   let seasonsLoaded = $state(false);
   let selectedSeasonId = $state<string | 'all'>('all');
   let seasonDefaulted = $state(false);
 
+  // The viewing member's own nights — needed only for the personal half of
+  // Season awards (best deck / biggest night); the standings themselves stay
+  // server-aggregated for privacy, this is always-already-yours data.
+  let myNights = $state<Night[]>([]);
+  let myNightsLoaded = $state(false);
+
+  // One leaderboard fetch per ended season, resolved once seasons are known —
+  // small at this league's scale (a handful of seasons a year).
+  let hallOfFame = $state<{ season: Season; champion: LeaderboardEntry | null }[]>([]);
+  let hallOfFameLoaded = $state(false);
+
+  // A single season's table is collapsible (it's one of several season-scoped
+  // sections stacked on the page); the all-time table is the page's own
+  // reason for existing, so it's never collapsed.
+  let tableOpen = $state(true);
+
   $effect(() => {
-    if (isMember && !loaded) reload('all');
+    if (isMember && !initialLoadStarted) {
+      initialLoadStarted = true;
+      reload('all');
+    }
     if (isMember && !seasonsLoaded) loadSeasons();
+    if (isMember && !myNightsLoaded) loadMyNights();
+  });
+
+  $effect(() => {
+    if (seasonsLoaded && !hallOfFameLoaded) loadHallOfFame();
   });
 
   // Auto-select the current season only once, the first time seasons finish
@@ -59,20 +94,67 @@
     }
   }
 
+  async function loadMyNights() {
+    try {
+      myNights = (await api<Night[]>('/api/nights')) ?? [];
+      myNightsLoaded = true;
+    } catch (e) {
+      toast(`Could not load your nights: ${(e as Error).message}`, true);
+    }
+  }
+
+  // Failures here are per-season and non-fatal — a past season's standings
+  // being briefly unreachable shouldn't block the whole page or retry forever.
+  async function loadHallOfFame() {
+    hallOfFameLoaded = true;
+    const today = todayISO();
+    const ended = seasonsList.filter((s) => s.endsOn && s.endsOn < today);
+    if (ended.length === 0) return;
+    try {
+      hallOfFame = await Promise.all(
+        ended.map(async (season) => {
+          const res = await api<Leaderboard>(`/api/leaderboard?seasonId=${encodeURIComponent(season.id)}`);
+          return { season, champion: rankLeaderboard(res?.entries ?? [])[0] ?? null };
+        })
+      );
+    } catch (e) {
+      toast(`Could not load the hall of fame: ${(e as Error).message}`, true);
+    }
+  }
+
   function pickSeason(id: string | 'all') {
     selectedSeasonId = id;
     reload(id);
   }
 
+  // Bumped on every reload() call so an in-flight request can tell whether
+  // it's been superseded by a newer one before touching state — without this,
+  // quickly picking two seasons in a row can let the first (now-stale) request
+  // resolve after the second and silently overwrite the correct data, since
+  // network responses aren't guaranteed to arrive in request order.
+  let reloadToken = 0;
+
   // seasonId is passed explicitly (rather than read from selectedSeasonId)
   // so callers control exactly which scope a given fetch requests, since
   // this runs both from effects and direct user picks.
   async function reload(seasonId: string | 'all') {
+    const token = ++reloadToken;
+    // Reset before the fetch, not after — otherwise the previous scope's
+    // entries (and loaded=true) linger during the round-trip and briefly
+    // render under the newly-selected season's heading.
+    loaded = false;
     try {
       const query = seasonId !== 'all' ? `?seasonId=${encodeURIComponent(seasonId)}` : '';
-      entries = (await api<LeaderboardEntry[]>(`/api/leaderboard${query}`)) ?? [];
+      const res = await api<Leaderboard>(`/api/leaderboard${query}`);
+      if (token !== reloadToken) return; // superseded by a later pick — discard
+      entries = res?.entries ?? [];
+      bestDeck = res?.bestDeck ?? null;
       loaded = true;
     } catch (e) {
+      if (token !== reloadToken) return;
+      entries = [];
+      bestDeck = null;
+      loaded = true;
       toast(`Could not load the leaderboard: ${(e as Error).message}`, true);
     }
   }
@@ -81,8 +163,10 @@
     return `https://github.com/${encodeURIComponent(login)}.png?size=60`;
   }
 
-  // Ranked by points; ties broken by fewer games played (rewards efficiency over volume).
-  let ranked = $derived.by(() => [...entries].sort((a, b) => pts(b) - pts(a) || games(a) - games(b)));
+  let ranked = $derived(rankLeaderboard(entries));
+  let isEndedSeason = $derived(
+    selectedSeason !== null && selectedSeason.endsOn !== null && selectedSeason.endsOn < todayISO()
+  );
 </script>
 
 <svelte:head>
@@ -129,36 +213,60 @@
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}
 
-      {#if !loaded}
-        <div class="empty">Loading…</div>
-      {:else if ranked.length === 0}
-        <div class="empty">No league nights logged yet.</div>
-      {:else}
-        <div class="ltable-scroll">
-          <div class="ltable">
-            <div class="lrow head">
-              <span>#</span><span>Player</span><span>Record</span><span>Games</span><span>Pts</span><span>PPG</span
-              ><span>Score%</span>
-            </div>
-            {#each ranked as e, i (e.login)}
-              {@const g = games(e)}
-              {@const p = pts(e)}
-              {@const pct = scorePct(e)}
-              <div class="lrow">
-                <span class="rank" class:gold={i === 0}>{i + 1}</span>
-                <span class="player">
-                  <img class="av" alt="" src={playerAvatarUrl(e.login)} />
-                  <span class="login">{e.login}</span>
-                </span>
-                <span class="mono">{e.w}-{e.t}-{e.l}</span>
-                <span class="mono">{g}</span>
-                <span class="mono">{p}</span>
-                <span class="mono gold">{ppg(e).toFixed(2)}</span>
-                <span class="mono">{pct !== null ? `${pct}%` : '—'}</span>
-              </div>
-            {/each}
-          </div>
+      {#if selectedSeasonId === 'all'}
+        <HallOfFame entries={hallOfFame} />
+      {/if}
+
+      {#if selectedSeason && isEndedSeason && loaded && myNightsLoaded}
+        <SeasonAwards season={selectedSeason} entries={ranked} {bestDeck} nights={myNights} myLogin={auth.principal.userDetails} />
+        <SeasonRecap season={selectedSeason} entries={ranked} />
+      {/if}
+
+      {#if selectedSeasonId !== 'all'}
+        <div
+          class="section-title toggle"
+          role="button"
+          tabindex="0"
+          onclick={() => (tableOpen = !tableOpen)}
+          onkeydown={(e) => e.key === 'Enter' && (tableOpen = !tableOpen)}
+        >
+          Season leaderboard
+          <span class="chev">{tableOpen ? '▴' : '▾'}</span>
         </div>
+      {/if}
+
+      {#if selectedSeasonId === 'all' || tableOpen}
+        {#if !loaded}
+          <div class="empty">Loading…</div>
+        {:else if ranked.length === 0}
+          <div class="empty">No league nights logged yet.</div>
+        {:else}
+          <div class="ltable-scroll">
+            <div class="ltable">
+              <div class="lrow head">
+                <span>#</span><span>Player</span><span>Record</span><span>Games</span><span>Pts</span><span>PPG</span
+                ><span>Score%</span>
+              </div>
+              {#each ranked as e, i (e.login)}
+                {@const g = games(e)}
+                {@const p = pts(e)}
+                {@const pct = scorePct(e)}
+                <div class="lrow">
+                  <span class="rank" class:gold={i === 0}>{i + 1}</span>
+                  <span class="player">
+                    <img class="av" alt="" src={playerAvatarUrl(e.login)} />
+                    <span class="login">{e.login}</span>
+                  </span>
+                  <span class="mono">{e.w}-{e.t}-{e.l}</span>
+                  <span class="mono">{g}</span>
+                  <span class="mono">{p}</span>
+                  <span class="mono gold">{ppg(e).toFixed(2)}</span>
+                  <span class="mono">{pct !== null ? `${pct}%` : '—'}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -186,6 +294,33 @@
   }
   .season-bar {
     margin-bottom: 10px;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 22px 2px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .section-title.toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .chev {
+    font-size: 11px;
   }
   .ltable-scroll {
     overflow-x: auto;

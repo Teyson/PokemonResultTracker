@@ -82,6 +82,22 @@ export interface LeaderboardEntry {
   l: number;
 }
 
+/** The league-wide top deck by PPG (more than 3 nights logged) for a leaderboard scope, with its owner. */
+export interface BestDeck {
+  deck: string;
+  ownerLogin: string;
+  nights: number;
+  w: number;
+  t: number;
+  l: number;
+}
+
+/** GET /api/leaderboard response: per-player standings plus a league-wide best-deck highlight, same scope. */
+export interface Leaderboard {
+  entries: LeaderboardEntry[];
+  bestDeck: BestDeck | null;
+}
+
 /** One admin/mutating action recorded to the audit trail. */
 export interface AuditLogEntry {
   id: string;

@@ -23,6 +23,10 @@ api/.env
 # Claude Code local settings (machine-specific permissions — launch.json IS committed)
 .claude/settings.local.json
 
+# Playwright (npm run test:e2e) — see e2e/README.md
+/test-results/
+/playwright-report/
+
 # Editor / OS
 .vscode/
 .DS_Store

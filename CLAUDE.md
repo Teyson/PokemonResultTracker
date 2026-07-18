@@ -72,9 +72,15 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
 - Frontend type-check: `npm run check` (svelte-check) at the repo root.
 - Frontend build: `npm run build` at the root. API build/type-check:
   `npm run build` in `api/` (plain `tsc` compiling to `api/dist`).
-- There is **no automated test suite**. The verification bar before opening a
-  PR is: both builds pass, `npm run check` passes, and the affected flow has
-  been exercised manually (or via browser preview) where practical.
+- There is **no automated test suite gating PRs**. The verification bar before
+  opening a PR is: both builds pass, `npm run check` passes, and the affected
+  flow has been exercised manually (or via browser preview) where practical.
+- Optionally, `npm run test:e2e` (root) runs a small Playwright smoke suite
+  (sign in, add a member, log a quick and a detailed night, leaderboard,
+  remove a member) against its own isolated database and ports (`4288`/`7078`)
+  — it never touches a running `npm run serve` (`4280`/`7071`) or its data.
+  It's opt-in and not wired into `check`/`build`/CI/hooks. See
+  [e2e/README.md](e2e/README.md), including how to fully remove it.
 - Full local run: build both, then `npm run serve` at the root (SWA CLI,
   default `http://localhost:4280`). Frontend-only iteration: `npm run dev`
   (Vite dev server; `/api/*` calls 404 without a Functions host).
@@ -96,7 +102,12 @@ migrations in `api/drizzle/`), deployed as an Azure Static Web App. See
   User ID/Username fields and use the browser tool's `type` action (real
   keystrokes) rather than `form_input` — that identity then carries through
   to `/.auth/me` and every `/api/*` call, so signing in as `ADMIN_GITHUB_LOGIN`
-  gets real admin access against the local database.
+  gets real admin access against the local database. That same form also
+  comes **pre-filled with a random default User ID/username** — clicking in
+  and typing without clearing first inserts real keystrokes into the middle
+  of that default value instead of replacing it, producing a garbled identity
+  that silently resolves to no role (discovered building `e2e/helpers/login.ts`,
+  which clears both fields before typing).
 - The user almost always has a `npm run serve` (SWA CLI, `http://localhost:4280`)
   already running locally with real seeded data — check there before starting a
   new one. If it's already up, just use it (e.g. navigate the browser preview to

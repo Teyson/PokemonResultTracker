@@ -59,23 +59,32 @@ const matchInputSchema = z.object({
   wentFirst: z.boolean().optional()
 });
 
-const nightInputSchema = z.object({
-  date: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'A valid date (YYYY-MM-DD) is required.'),
-  deck: z.string().trim().min(1, 'A deck name is required.'),
-  type: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : 'Colorless'), z.string()),
-  w: nonNegativeInt,
-  t: nonNegativeInt,
-  l: nonNegativeInt,
-  notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable()),
-  isLeagueNight: z.boolean().optional().default(true),
-  // Detailed mode: when present, replaces the night's per-match log and the
-  // w/t/l totals are derived from it instead of the fields above. Absent
-  // (quick mode) leaves any existing matches untouched.
-  matches: z.array(matchInputSchema).max(50).optional()
-});
+// UTC-based (matches the ISO date strings played_on stores and the frontend's
+// own todayISO() in src/lib/pokemon.ts) so the cutoff lands on the same day
+// regardless of the server's local timezone.
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const nightInputSchema = z
+  .object({
+    date: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'A valid date (YYYY-MM-DD) is required.'),
+    deck: z.string().trim().min(1, 'A deck name is required.'),
+    type: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : 'Colorless'), z.string()),
+    w: nonNegativeInt,
+    t: nonNegativeInt,
+    l: nonNegativeInt,
+    notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable()),
+    isLeagueNight: z.boolean().optional().default(true),
+    // Detailed mode: when present, replaces the night's per-match log and the
+    // w/t/l totals are derived from it instead of the fields above. Absent
+    // (quick mode) leaves any existing matches untouched.
+    matches: z.array(matchInputSchema).max(50).optional()
+  })
+  .refine((v) => v.date <= todayISO(), { message: 'Nights cannot be logged for a future date.', path: ['date'] });
 
 const SELECT_COLUMNS = {
   id: nights.id,

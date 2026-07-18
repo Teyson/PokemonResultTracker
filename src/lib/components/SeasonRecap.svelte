@@ -1,10 +1,13 @@
 <script lang="ts">
   import type { Season, LeaderboardEntry } from '$lib/types';
   import { ppg, games } from '$lib/pokemon';
+  import { slide } from 'svelte/transition';
 
   let { season, entries }: { season: Season; entries: LeaderboardEntry[] } = $props();
 
   const MEDALS = ['🥇', '🥈', '🥉'];
+
+  let open = $state(true);
 
   let top3 = $derived(entries.slice(0, 3));
   let totals = $derived(
@@ -12,33 +15,38 @@
   );
 </script>
 
-<div class="section-title">Season recap · {season.name}</div>
-<div class="recap">
-  {#if top3.length > 0}
-    <div class="standings">
-      {#each top3 as e, i (e.login)}
-        <div class="row">
-          <span class="medal">{MEDALS[i]}</span>
-          <span class="login">{e.login}</span>
-          <span class="mono">{e.w}-{e.t}-{e.l}</span>
-          <span class="mono gold">{ppg(e).toFixed(2)}</span>
-        </div>
-      {/each}
-    </div>
-  {:else}
-    <div class="empty">No league nights logged this season.</div>
-  {/if}
-  <div class="totals">
-    <div class="card">
-      <div class="v">{totals.nights}</div>
-      <div class="k">Nights logged</div>
-    </div>
-    <div class="card">
-      <div class="v">{totals.games}</div>
-      <div class="k">Games played</div>
+<div class="section-title toggle" role="button" tabindex="0" onclick={() => (open = !open)} onkeydown={(e) => e.key === 'Enter' && (open = !open)}>
+  Season recap · {season.name}
+  <span class="chev">{open ? '▴' : '▾'}</span>
+</div>
+{#if open}
+  <div class="recap" transition:slide={{ duration: 220 }}>
+    {#if top3.length > 0}
+      <div class="standings">
+        {#each top3 as e, i (e.login)}
+          <div class="row">
+            <span class="medal">{MEDALS[i]}</span>
+            <span class="login">{e.login}</span>
+            <span class="mono">{e.w}-{e.t}-{e.l}</span>
+            <span class="mono gold">{ppg(e).toFixed(2)}</span>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="empty">No league nights logged this season.</div>
+    {/if}
+    <div class="totals">
+      <div class="card">
+        <div class="v">{totals.nights}</div>
+        <div class="k">Nights logged</div>
+      </div>
+      <div class="card">
+        <div class="v">{totals.games}</div>
+        <div class="k">Games played</div>
+      </div>
     </div>
   </div>
-</div>
+{/if}
 
 <style>
   .section-title {
@@ -57,6 +65,16 @@
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .section-title.toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .chev {
+    font-size: 11px;
   }
   .recap {
     background: var(--panel);

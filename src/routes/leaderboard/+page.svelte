@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, LeaderboardEntry, Night, Season } from '$lib/types';
+  import type { ClientPrincipal, LeaderboardEntry, Leaderboard, BestDeck, Night, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
@@ -21,6 +21,7 @@
   let isAdmin = $derived(auth.isAdmin);
 
   let entries = $state<LeaderboardEntry[]>([]);
+  let bestDeck = $state<BestDeck | null>(null);
   let loaded = $state(false);
 
   let seasonsList = $state<Season[]>([]);
@@ -102,8 +103,8 @@
     try {
       hallOfFame = await Promise.all(
         ended.map(async (season) => {
-          const seasonEntries = (await api<LeaderboardEntry[]>(`/api/leaderboard?seasonId=${encodeURIComponent(season.id)}`)) ?? [];
-          return { season, champion: rankLeaderboard(seasonEntries)[0] ?? null };
+          const res = await api<Leaderboard>(`/api/leaderboard?seasonId=${encodeURIComponent(season.id)}`);
+          return { season, champion: rankLeaderboard(res?.entries ?? [])[0] ?? null };
         })
       );
     } catch (e) {
@@ -122,7 +123,9 @@
   async function reload(seasonId: string | 'all') {
     try {
       const query = seasonId !== 'all' ? `?seasonId=${encodeURIComponent(seasonId)}` : '';
-      entries = (await api<LeaderboardEntry[]>(`/api/leaderboard${query}`)) ?? [];
+      const res = await api<Leaderboard>(`/api/leaderboard${query}`);
+      entries = res?.entries ?? [];
+      bestDeck = res?.bestDeck ?? null;
       loaded = true;
     } catch (e) {
       toast(`Could not load the leaderboard: ${(e as Error).message}`, true);
@@ -188,7 +191,7 @@
       {/if}
 
       {#if selectedSeason && isEndedSeason && loaded && myNightsLoaded}
-        <SeasonAwards season={selectedSeason} entries={ranked} nights={myNights} myLogin={auth.principal.userDetails} />
+        <SeasonAwards season={selectedSeason} entries={ranked} {bestDeck} nights={myNights} myLogin={auth.principal.userDetails} />
         <SeasonRecap season={selectedSeason} entries={ranked} />
       {/if}
 

@@ -40,14 +40,24 @@
   // wouldn't claim their deck, just create/match a same-named deck under the
   // current user). Decks only ever seen as an opponent must never show up
   // here — facing a deck doesn't make it yours.
+  //
+  // Sorted by most-recently-played first (idea #17): most players run the
+  // same deck for weeks, so surfacing it as the first chip removes the only
+  // real friction left in logging a night. Tracked by `date` explicitly
+  // rather than relying on `nights` already arriving newest-first — the API
+  // happens to do that today, but this stays correct even if it didn't.
   function deckRegistry(): DeckOption[] {
-    const map = new Map<string, DeckOption>();
+    const lastPlayed = new Map<string, string>();
+    const byKey = new Map<string, DeckOption>();
     for (const n of nights) {
       if (n.createdBy !== myLogin) continue;
       const k = n.deck.trim().toLowerCase();
-      if (!map.has(k)) map.set(k, { name: n.deck, type: n.type });
+      if (!byKey.has(k)) byKey.set(k, { name: n.deck, type: n.type });
+      if (!lastPlayed.has(k) || n.date > (lastPlayed.get(k) as string)) lastPlayed.set(k, n.date);
     }
-    return [...map.values()];
+    return [...byKey.entries()]
+      .sort(([a], [b]) => (lastPlayed.get(b) ?? '').localeCompare(lastPlayed.get(a) ?? ''))
+      .map(([, d]) => d);
   }
 
   let decks = $derived(deckRegistry());

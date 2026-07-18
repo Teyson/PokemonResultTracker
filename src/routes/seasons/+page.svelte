@@ -1,15 +1,13 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, Season } from '$lib/types';
+  import type { AuthContext, Season } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { fmtDate } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
-    'auth'
-  );
+  const auth = getContext<AuthContext>('auth');
   let isAdmin = $derived(auth.isAdmin);
 
   let seasonsList = $state<Season[]>([]);
@@ -119,7 +117,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <Masthead {isAdmin} principal={auth.principal} />
+      <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
       <h2>Seasons</h2>
       <div class="sub">
         Partition play into named seasons so the scoreboard and deck stats can default to "right now" instead of an

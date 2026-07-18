@@ -3,7 +3,11 @@
   import NavMenu from './NavMenu.svelte';
   import type { ClientPrincipal } from '$lib/types';
 
-  let { isAdmin = false, principal = null }: { isAdmin?: boolean; principal?: ClientPrincipal | null } = $props();
+  let {
+    isAdmin = false,
+    principal = null,
+    alias = null
+  }: { isAdmin?: boolean; principal?: ClientPrincipal | null; alias?: string | null } = $props();
 </script>
 
 <div class="masthead">
@@ -14,7 +18,7 @@
       <div class="sub">casual Pokémon TCG log</div>
     </div>
   </a>
-  <NavMenu {isAdmin} {principal} />
+  <NavMenu {isAdmin} {principal} {alias} />
 </div>
 
 <style>

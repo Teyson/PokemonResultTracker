@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, LeaderboardEntry, Leaderboard, BestDeck, Night, Season } from '$lib/types';
+  import type { AuthContext, LeaderboardEntry, Leaderboard, BestDeck, Night, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
@@ -14,9 +14,7 @@
   import SeasonRecap from '$lib/components/SeasonRecap.svelte';
   import HallOfFame from '$lib/components/HallOfFame.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
-    'auth'
-  );
+  const auth = getContext<AuthContext>('auth');
   let isMember = $derived(auth.isMember);
   let isAdmin = $derived(auth.isAdmin);
 
@@ -199,7 +197,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <Masthead {isAdmin} principal={auth.principal} />
+      <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
       <h2>League leaderboard</h2>
       <div class="sub">
         Standings for league nights only — casual nights don't count here. Ranked by points, ties broken by fewer
@@ -255,7 +253,7 @@
                   <span class="rank" class:gold={i === 0}>{i + 1}</span>
                   <span class="player">
                     <img class="av" alt="" src={playerAvatarUrl(e.login)} />
-                    <span class="login">{e.login}</span>
+                    <span class="login">{e.displayName}</span>
                   </span>
                   <span class="mono">{e.w}-{e.t}-{e.l}</span>
                   <span class="mono">{g}</span>

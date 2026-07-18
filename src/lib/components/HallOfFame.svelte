@@ -12,7 +12,7 @@
         <div class="card">
           <div class="season">{e.season.name}</div>
           {#if e.champion}
-            <div class="champion">🏆 {e.champion.login}</div>
+            <div class="champion">🏆 {e.champion.displayName}</div>
             <div class="record">{e.champion.w}-{e.champion.t}-{e.champion.l}</div>
           {:else}
             <div class="champion muted">No standings</div>

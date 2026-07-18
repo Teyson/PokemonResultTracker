@@ -3,7 +3,11 @@
   import { avatarUrl } from '$lib/auth';
   import ThemeToggle from './ThemeToggle.svelte';
 
-  let { isAdmin = false, principal = null }: { isAdmin?: boolean; principal?: ClientPrincipal | null } = $props();
+  let {
+    isAdmin = false,
+    principal = null,
+    alias = null
+  }: { isAdmin?: boolean; principal?: ClientPrincipal | null; alias?: string | null } = $props();
 
   let open = $state(false);
   let rootEl: HTMLDivElement;
@@ -41,12 +45,12 @@
   {#if open}
     <nav class="menu">
       {#if principal}
-        <div class="who">
+        <a class="who" href="/profile" onclick={navigate}>
           {#if avatarUrl(principal)}
             <img class="av" alt="" src={avatarUrl(principal)} />
           {/if}
-          <span class="login">{principal.userDetails}</span>
-        </div>
+          <span class="login">{alias || principal.userDetails}</span>
+        </a>
         <div class="divider"></div>
       {/if}
       <a class="item" href="/" onclick={navigate}>Tracker</a>
@@ -120,6 +124,15 @@
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
+    border-radius: 7px;
+    text-decoration: none;
+  }
+  .who:hover {
+    background: var(--panel2);
+  }
+  .who:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
   }
   .who .av {
     width: 24px;

@@ -43,6 +43,11 @@ export function sortedByDate(nights: Night[]): Night[] {
   return [...nights].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id.localeCompare(b.id)));
 }
 
+/** Ranks leaderboard-shaped entries by points, ties broken by fewer games (efficiency over volume) — the one ranking rule shared by standings, champion, and hall-of-fame views. */
+export function rankLeaderboard<T extends { w: number; t: number; l: number }>(entries: T[]): T[] {
+  return [...entries].sort((a, b) => pts(b) - pts(a) || games(a) - games(b));
+}
+
 /** Combined PPG over the most recent n nights (chronological) — "current form" vs the season average. */
 export function rollingPpg(nights: Night[], n: number): number {
   const recent = sortedByDate(nights).slice(-n);

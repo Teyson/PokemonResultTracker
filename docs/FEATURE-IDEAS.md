@@ -945,6 +945,23 @@ aggregates server-side for privacy.
 
 ### 31. Season awards & champion recap
 
+> **Status: implemented**, bundled in the same PR as #33 per the user's request.
+> A `src/lib/seasonAwards.ts` (`personalSeasonAwards`) and a new
+> `SeasonAwards.svelte` panel live on `/leaderboard`, shown whenever a specific
+> season (not "All time") is selected in the switcher — labeled "Final" for an
+> ended season, "Provisional" otherwise, per this idea's own pitfall note. It
+> shows the champion (from the already-fetched season-scoped leaderboard
+> entries, with a "That's you!"/"You're #N" line), plus three personal
+> stats scoped to league nights only, matching the leaderboard's own scoping:
+> nights played, best deck (min 3 games — mirrors `records.ts`'s
+> `BEST_NIGHT_MIN_GAMES` floor), and biggest single night (same floor). "Most
+> nights attended" and "best deck"/"biggest night" are the *viewing member's
+> own* numbers, not league-wide superlatives — the champion field is the only
+> cross-player comparison, sourced from #32's endpoint as scoped. A
+> `rankLeaderboard` helper was extracted into `src/lib/pokemon.ts` so the
+> leaderboard page, this panel, and #33's hall of fame all rank by the exact
+> same tie-break rule instead of re-deriving it three times.
+
 **What.** Automatically-computed per-season awards, distinct from #26's lifetime
 badges: Season Champion (best PPG among members, minimum games), most nights
 attended, best deck of the season, biggest single night — shown when an ended
@@ -1003,6 +1020,20 @@ When extracting the switcher, keep the main page pixel-identical — it's now th
 most-seen control in the app.
 
 ### 33. Season recap & hall of fame
+
+> **Status: implemented**, bundled in the same PR as #31 per the user's request.
+> `SeasonRecap.svelte` renders on `/leaderboard` only when the selected season
+> has ended (final top-3 standings plus league-wide totals — nights logged,
+> games played — both derived at read time from the season-scoped leaderboard
+> entries already fetched for the page, no snapshot). `HallOfFame.svelte`
+> renders unconditionally as a horizontal-scroll strip above the standings,
+> one card per ended season, each fetched via its own
+> `/api/leaderboard?seasonId=` call resolved once seasons load. Per-season
+> "best deck" and "biggest night" were **not** built as league-wide
+> superlatives here — they land in #31's personal awards panel instead (same
+> PR, same page), reusing the viewing member's own nights rather than adding
+> any new cross-player deck/night exposure; this stayed within the existing
+> aggregate-only privacy boundary #8/#9 established.
 
 **What.** For each ended season, a recap view: final top-3 standings, best deck
 (minimum games), biggest night, and totals (nights/games played) — plus a "hall

@@ -1,15 +1,18 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, LeaderboardEntry, Season } from '$lib/types';
+  import type { ClientPrincipal, LeaderboardEntry, Night, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
+  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO, rankLeaderboard } from '$lib/pokemon';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
   import SeasonSwitcher from '$lib/components/SeasonSwitcher.svelte';
   import SeasonProgress from '$lib/components/SeasonProgress.svelte';
+  import SeasonAwards from '$lib/components/SeasonAwards.svelte';
+  import SeasonRecap from '$lib/components/SeasonRecap.svelte';
+  import HallOfFame from '$lib/components/HallOfFame.svelte';
 
   const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
     'auth'
@@ -25,9 +28,25 @@
   let selectedSeasonId = $state<string | 'all'>('all');
   let seasonDefaulted = $state(false);
 
+  // The viewing member's own nights — needed only for the personal half of
+  // Season awards (best deck / biggest night); the standings themselves stay
+  // server-aggregated for privacy, this is always-already-yours data.
+  let myNights = $state<Night[]>([]);
+  let myNightsLoaded = $state(false);
+
+  // One leaderboard fetch per ended season, resolved once seasons are known —
+  // small at this league's scale (a handful of seasons a year).
+  let hallOfFame = $state<{ season: Season; champion: LeaderboardEntry | null }[]>([]);
+  let hallOfFameLoaded = $state(false);
+
   $effect(() => {
     if (isMember && !loaded) reload('all');
     if (isMember && !seasonsLoaded) loadSeasons();
+    if (isMember && !myNightsLoaded) loadMyNights();
+  });
+
+  $effect(() => {
+    if (seasonsLoaded && !hallOfFameLoaded) loadHallOfFame();
   });
 
   // Auto-select the current season only once, the first time seasons finish
@@ -59,6 +78,34 @@
     }
   }
 
+  async function loadMyNights() {
+    try {
+      myNights = (await api<Night[]>('/api/nights')) ?? [];
+      myNightsLoaded = true;
+    } catch (e) {
+      toast(`Could not load your nights: ${(e as Error).message}`, true);
+    }
+  }
+
+  // Failures here are per-season and non-fatal — a past season's standings
+  // being briefly unreachable shouldn't block the whole page or retry forever.
+  async function loadHallOfFame() {
+    hallOfFameLoaded = true;
+    const today = todayISO();
+    const ended = seasonsList.filter((s) => s.endsOn && s.endsOn < today);
+    if (ended.length === 0) return;
+    try {
+      hallOfFame = await Promise.all(
+        ended.map(async (season) => {
+          const seasonEntries = (await api<LeaderboardEntry[]>(`/api/leaderboard?seasonId=${encodeURIComponent(season.id)}`)) ?? [];
+          return { season, champion: rankLeaderboard(seasonEntries)[0] ?? null };
+        })
+      );
+    } catch (e) {
+      toast(`Could not load the hall of fame: ${(e as Error).message}`, true);
+    }
+  }
+
   function pickSeason(id: string | 'all') {
     selectedSeasonId = id;
     reload(id);
@@ -81,8 +128,10 @@
     return `https://github.com/${encodeURIComponent(login)}.png?size=60`;
   }
 
-  // Ranked by points; ties broken by fewer games played (rewards efficiency over volume).
-  let ranked = $derived.by(() => [...entries].sort((a, b) => pts(b) - pts(a) || games(a) - games(b)));
+  let ranked = $derived(rankLeaderboard(entries));
+  let isEndedSeason = $derived(
+    selectedSeason !== null && selectedSeason.endsOn !== null && selectedSeason.endsOn < todayISO()
+  );
 </script>
 
 <svelte:head>
@@ -127,6 +176,22 @@
           <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={pickSeason} />
         </div>
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
+      {/if}
+
+      <HallOfFame entries={hallOfFame} />
+
+      {#if selectedSeason && loaded && myNightsLoaded}
+        <SeasonAwards
+          season={selectedSeason}
+          entries={ranked}
+          nights={myNights}
+          myLogin={auth.principal.userDetails}
+          ended={isEndedSeason}
+        />
+      {/if}
+
+      {#if selectedSeason && isEndedSeason && loaded}
+        <SeasonRecap season={selectedSeason} entries={ranked} />
       {/if}
 
       {#if !loaded}

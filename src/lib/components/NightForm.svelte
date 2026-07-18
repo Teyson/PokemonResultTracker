@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Night, NightInput, DeckSummary } from '$lib/types';
-  import { recentTuesday, isTuesday } from '$lib/pokemon';
+  import { recentTuesday, isTuesday, todayISO } from '$lib/pokemon';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
   import { slide } from 'svelte/transition';
 
@@ -189,8 +189,8 @@
 
   /** Changing the date re-defaults the night type: Tuesdays are league night, anything else casual. */
   function onDateInput(v: string) {
-    date = v;
-    isLeagueNight = isTuesday(v);
+    date = v > todayISO() ? todayISO() : v;
+    isLeagueNight = isTuesday(date);
   }
 
   function selectDeck(d: DeckOption) {
@@ -248,7 +248,13 @@
   <div class="form-row">
     <div class="field">
       <label for="fDate">Date</label>
-      <input id="fDate" type="date" value={date} oninput={(e) => onDateInput(e.currentTarget.value)} />
+      <input
+        id="fDate"
+        type="date"
+        max={todayISO()}
+        value={date}
+        oninput={(e) => onDateInput(e.currentTarget.value)}
+      />
     </div>
     <div class="field">
       <span class="field-label">Night type</span>

@@ -18,6 +18,10 @@ export interface NightResponse {
   notes: string | null;
   isLeagueNight: boolean;
   createdBy: string;
+  // The owner's alias if they've set one, else the same value as createdBy —
+  // use this (not createdBy) whenever the owner's name is shown to other
+  // players; createdBy stays the real GitHub login for grouping/matching.
+  createdByDisplay: string;
   matches?: MatchResponse[];
   // Only present on the admin scope=deleted view.
   deletedAt?: string;
@@ -28,6 +32,8 @@ export interface DeckSummaryResponse {
   name: string;
   type: string;
   ownerLogin: string | null;
+  // The owner's alias if set, else ownerLogin; null when unowned. Use this for display.
+  ownerDisplayName: string | null;
   timesPlayedAgainst: number;
   lastPlayedAgainst: string | null;
   // Only present for admins: league-wide usage, used by the deck management
@@ -39,12 +45,19 @@ export interface DeckSummaryResponse {
 export interface AllowedUserResponse {
   id: string;
   github_login: string;
+  // The member's alias if they've signed in and set one, else null (also
+  // null for a pending invite that hasn't signed in yet). Admin-only view —
+  // shown alongside github_login, never in place of it.
+  alias: string | null;
   role: 'member' | 'admin';
   created_at: string;
 }
 
 export interface UsersResponse {
   admin: string;
+  // The admin's own alias, looked up separately since the admin is defined by
+  // env vars rather than an allowed_users row.
+  adminAlias: string | null;
   users: AllowedUserResponse[];
 }
 
@@ -59,6 +72,8 @@ export interface SeasonResponse {
 /** One player's season totals for the leaderboard — league nights only, never per-night detail. */
 export interface LeaderboardEntryResponse {
   login: string;
+  // The player's alias if set, else the same value as login. Use this for display.
+  displayName: string;
   nights: number;
   w: number;
   t: number;
@@ -69,6 +84,8 @@ export interface LeaderboardEntryResponse {
 export interface BestDeckResponse {
   deck: string;
   ownerLogin: string;
+  // The owner's alias if set, else ownerLogin. Use this for display.
+  ownerDisplayName: string;
   nights: number;
   w: number;
   t: number;

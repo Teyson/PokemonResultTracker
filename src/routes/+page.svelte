@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, Night, NightInput, DeckSummary, Season } from '$lib/types';
+  import type { AuthContext, Night, NightInput, DeckSummary, Season } from '$lib/types';
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
@@ -18,9 +18,7 @@
   import SeasonSwitcher from '$lib/components/SeasonSwitcher.svelte';
   import SeasonProgress from '$lib/components/SeasonProgress.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
-    'auth'
-  );
+  const auth = getContext<AuthContext>('auth');
 
   let isMember = $derived(auth.isMember);
   let isAdmin = $derived(auth.isAdmin);
@@ -165,7 +163,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <Masthead {isAdmin} principal={auth.principal} />
+      <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
 
       {#if seasonsList.length > 0}
         <div class="season-bar">

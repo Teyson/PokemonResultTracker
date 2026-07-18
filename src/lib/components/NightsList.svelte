@@ -61,7 +61,7 @@
             </div>
             <div class="date">
               {fmtDate(n.date)}
-              {#if showOwner}<span class="owner">· {n.createdBy}</span>{/if}
+              {#if showOwner}<span class="owner">· {n.createdByDisplay}</span>{/if}
             </div>
             {#if n.matches && n.matches.length > 0}
               <button

@@ -6,6 +6,7 @@ import { decks, matches, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
 import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
+import { displayName } from '../db/displayName';
 import type { DeckSummaryResponse } from '../types';
 
 /**
@@ -91,6 +92,7 @@ app.http('decks', {
             name: decks.name,
             type: decks.energyType,
             ownerLogin: users.githubLogin,
+            ownerAlias: users.alias,
             timesPlayedAgainst: oppStats.cnt,
             lastPlayedAgainst: oppStats.lastPlayed
           })
@@ -123,6 +125,7 @@ app.http('decks', {
           name: r.name,
           type: r.type ?? 'Colorless',
           ownerLogin: r.ownerLogin,
+          ownerDisplayName: r.ownerLogin ? displayName(r.ownerLogin, r.ownerAlias) : null,
           timesPlayedAgainst: r.timesPlayedAgainst ?? 0,
           lastPlayedAgainst: r.lastPlayedAgainst,
           ...(isAdmin ? { nightsCount: nightsUsage.get(r.id) ?? 0, opponentCount: opponentUsage.get(r.id) ?? 0 } : {})

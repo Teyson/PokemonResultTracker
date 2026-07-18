@@ -1936,6 +1936,34 @@ deck there, not a player) — player Elo is event-data-only, say so in the UI.
 
 ### 59. Player profile pages
 
+> **Status: implemented differently than scoped**, at a member's own request
+> for a self-service **alias** (a display name shown to other players instead
+> of the GitHub login) rather than the original 55/57/58-dependent social hub
+> — none of which exist yet. Landed as `/profile` (own account only, no
+> `?login=` query string, no rewrite needed beyond the flat `/profile.html`
+> the static build already emits): your real GitHub identity (read-only), an
+> alias editor with a live "others will see you as…" preview, and your own
+> Scoreboard/Records/DeckTable/Badges reusing existing components exactly as
+> this idea's "How" scoped. Schema: nullable `users.alias`. `GET/PUT /api/me`
+> now doubles as the alias read/write endpoint (member-only, self-only — no
+> path exists to set anyone else's), case-insensitively unique against every
+> other member's alias *and* GitHub login so an alias can never impersonate a
+> real member. Every place another player's identity was already shown grew a
+> parallel `*Display`/`displayName` field computed server-side
+> (`api/src/db/displayName.ts`: alias-if-set-else-login) alongside the
+> original login field, which stays untouched and keeps doing ownership/
+> identity-matching duty (`nights.createdBy`, `LeaderboardEntry.login`,
+> `DeckSummary.ownerLogin`) — only rendering switched to the new display
+> field, in `DeckPicker`'s opponent chips, `DeckTable`/`NightsList`'s
+> admin-scope owner labels, and the leaderboard/season-awards/recap/hall-of-
+> fame views. Deliberately **not** changed: the admin whitelist (`/admin`
+> member list, deleted-nights forensic view) and the `/decks` registry stay on
+> real GitHub logins — those are access-control/accountability surfaces, not
+> "shown to other players" in the sense this idea and the user's request
+> meant. The original query-string-route framing, and everything 55/57/58
+> would add, are still open — pick this back up once the event suite (section
+> G) exists.
+
 **What.** A page per member — `/player?login=<handle>` — with avatar, badges,
 favorite/most-played decks, form trend, head-to-head vs the viewer (57), Elo
 (58), and event placements (55).

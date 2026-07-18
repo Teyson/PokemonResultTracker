@@ -1,7 +1,7 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { eq, sql, asc } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { allowedUsers } from '../db/schema';
+import { allowedUsers, users } from '../db/schema';
 import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { UsersResponse } from '../types';
@@ -42,17 +42,37 @@ app.http('users', {
       if (!isAdmin) return { status: 403, jsonBody: { error: 'Admins only.' } };
 
       if (request.method === 'GET') {
+        // Left join: a pending invite (no user_id bound yet, hasn't signed in)
+        // has no users row to join, so alias comes back null — same as a
+        // member who's never set one.
         const rows = await db
           .select({
             id: allowedUsers.id,
             github_login: allowedUsers.githubLogin,
+            alias: users.alias,
             role: allowedUsers.role,
             created_at: allowedUsers.createdAt
           })
           .from(allowedUsers)
+          .leftJoin(users, eq(users.userId, allowedUsers.userId))
           .orderBy(asc(allowedUsers.createdAt), asc(allowedUsers.id));
+
+        // The admin isn't an allowed_users row, so their alias is looked up
+        // separately — by the immutable ADMIN_USER_ID once set, else by a
+        // login match during the bootstrap window (see auth.ts's resolveRole
+        // for the same two-step admin identity).
+        const adminUserId = (process.env.ADMIN_USER_ID ?? '').trim();
+        let adminAlias: string | null = null;
+        if (admin) {
+          const adminRow = adminUserId
+            ? (await db.select({ alias: users.alias }).from(users).where(eq(users.userId, adminUserId)))[0]
+            : (await db.select({ alias: users.alias }).from(users).where(sql`LOWER(${users.githubLogin}) = LOWER(${admin})`))[0];
+          adminAlias = adminRow?.alias ?? null;
+        }
+
         const response: UsersResponse = {
           admin,
+          adminAlias,
           users: rows.map((r) => ({ ...r, id: String(r.id), role: r.role as 'member' | 'admin', created_at: toDateOnly(r.created_at) }))
         };
         return { jsonBody: response };

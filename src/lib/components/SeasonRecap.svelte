@@ -26,7 +26,7 @@
         {#each top3 as e, i (e.login)}
           <div class="row">
             <span class="medal">{MEDALS[i]}</span>
-            <span class="login">{e.login}</span>
+            <span class="login">{e.displayName}</span>
             <span class="mono">{e.w}-{e.t}-{e.l}</span>
             <span class="mono gold">{ppg(e).toFixed(2)}</span>
           </div>

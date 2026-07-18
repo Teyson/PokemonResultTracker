@@ -45,6 +45,13 @@ export const users = mssqlTable('users', {
   // Current GitHub login, refreshed on each sign-in. Display only, not unique
   // (a freed-up login could briefly appear on two rows until both refresh).
   githubLogin: nvarchar('github_login', { length: 100 }).notNull(),
+  // Optional display name the player chooses for themselves, shown instead of
+  // githubLogin to other players (leaderboard, opponent deck lists, etc.) —
+  // never used for ownership/auth, which stay keyed on userId/githubLogin.
+  // Null means "no alias set, show the GitHub login". Self-service, set from
+  // /profile via PUT /api/me; checked case-insensitively unique against other
+  // users' alias/githubLogin so aliases can't impersonate a real member.
+  alias: nvarchar('alias', { length: 50 }),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

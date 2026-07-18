@@ -6,6 +6,7 @@ import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { upsertOwnedDeck, upsertOpponentDeck } from '../db/decks';
 import { ensureUser } from '../db/userDirectory';
+import { displayName } from '../db/displayName';
 import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { MatchResponse, NightResponse } from '../types';
@@ -98,7 +99,10 @@ const SELECT_COLUMNS = {
   isLeagueNight: nights.isLeagueNight,
   // Owner display name comes from the joined users row, so it always reflects
   // the owner's current GitHub login.
-  createdBy: users.githubLogin
+  createdBy: users.githubLogin,
+  // Raw alias column, folded into createdByDisplay in toResponse() — never
+  // exposed on the response as-is.
+  createdByAlias: users.alias
 };
 
 // Only selected for the admin scope=deleted view — deletedAt is never exposed
@@ -121,13 +125,15 @@ function toResponse(row: {
   notes: string | null;
   isLeagueNight: boolean;
   createdBy: string;
+  createdByAlias: string | null;
   deletedAt?: Date | null;
 }): NightResponse {
-  const { deletedAt, ...rest } = row;
+  const { deletedAt, createdByAlias, ...rest } = row;
   return {
     ...rest,
     id: String(row.id),
     type: row.type ?? 'Colorless',
+    createdByDisplay: displayName(row.createdBy, createdByAlias),
     ...(deletedAt ? { deletedAt: deletedAt.toISOString() } : {})
   };
 }

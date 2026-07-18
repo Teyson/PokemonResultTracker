@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, DeckSummary } from '$lib/types';
+  import type { AuthContext, DeckSummary } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { TYPES, colorOf } from '$lib/pokemon';
@@ -8,9 +8,7 @@
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
-    'auth'
-  );
+  const auth = getContext<AuthContext>('auth');
   let isAdmin = $derived(auth.isAdmin);
 
   let decksList = $state<DeckSummary[]>([]);
@@ -165,7 +163,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <Masthead {isAdmin} principal={auth.principal} />
+      <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
       <h2>Deck registry</h2>
       <div class="sub">
         Every deck ever logged or picked as an opponent. Rename a typo, merge duplicates into one deck (moves their

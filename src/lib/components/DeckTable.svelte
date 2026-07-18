@@ -54,7 +54,7 @@
           key: k,
           deck: n.deck,
           type: n.type,
-          owner: n.createdBy,
+          owner: n.createdByDisplay,
           w: 0,
           t: 0,
           l: 0,

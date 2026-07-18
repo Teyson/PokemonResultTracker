@@ -3,6 +3,7 @@ import { and, eq, gte, lte, isNull, count, sum } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { nights, seasons, users, decks } from '../db/schema';
 import { getUser, resolveRole } from '../auth';
+import { displayName } from '../db/displayName';
 import type { LeaderboardEntryResponse, LeaderboardResponse, BestDeckResponse } from '../types';
 
 /**
@@ -64,6 +65,7 @@ app.http('leaderboard', {
       const rows = await db
         .select({
           login: users.githubLogin,
+          alias: users.alias,
           nights: count(nights.id),
           w: sum(nights.wins).mapWith(Number),
           t: sum(nights.ties).mapWith(Number),
@@ -72,13 +74,14 @@ app.http('leaderboard', {
         .from(nights)
         .innerJoin(users, eq(users.id, nights.ownerId))
         .where(scopeFilter)
-        .groupBy(users.githubLogin);
+        .groupBy(users.githubLogin, users.alias);
 
       // SUM() is typed nullable in general (no matching rows), but every row here came from
       // a GROUP BY with at least one match, so the sums are never actually null — the ?? 0
       // just satisfies the type.
       const entries: LeaderboardEntryResponse[] = rows.map((r) => ({
         login: r.login,
+        displayName: displayName(r.login, r.alias),
         nights: r.nights,
         w: r.w ?? 0,
         t: r.t ?? 0,
@@ -91,6 +94,7 @@ app.http('leaderboard', {
         .select({
           deck: decks.name,
           ownerLogin: users.githubLogin,
+          ownerAlias: users.alias,
           nights: count(nights.id),
           w: sum(nights.wins).mapWith(Number),
           t: sum(nights.ties).mapWith(Number),
@@ -100,7 +104,7 @@ app.http('leaderboard', {
         .innerJoin(decks, eq(decks.id, nights.deckId))
         .innerJoin(users, eq(users.id, nights.ownerId))
         .where(scopeFilter)
-        .groupBy(decks.id, decks.name, users.githubLogin);
+        .groupBy(decks.id, decks.name, users.githubLogin, users.alias);
 
       let bestDeck: BestDeckResponse | null = null;
       let bestPpg = -1;
@@ -113,7 +117,15 @@ app.http('leaderboard', {
         const ppg = games ? (w * 3 + t) / games : 0;
         if (ppg > bestPpg) {
           bestPpg = ppg;
-          bestDeck = { deck: r.deck, ownerLogin: r.ownerLogin, nights: r.nights, w, t, l };
+          bestDeck = {
+            deck: r.deck,
+            ownerLogin: r.ownerLogin,
+            ownerDisplayName: displayName(r.ownerLogin, r.ownerAlias),
+            nights: r.nights,
+            w,
+            t,
+            l
+          };
         }
       }
 

@@ -28,7 +28,7 @@
       id: d.id,
       name: d.name,
       type: d.type,
-      owner: d.ownerLogin,
+      owner: d.ownerDisplayName,
       timesPlayedAgainst: d.timesPlayedAgainst,
       lastPlayedAgainst: d.lastPlayedAgainst
     }))

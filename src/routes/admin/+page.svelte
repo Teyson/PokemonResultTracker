@@ -1,18 +1,16 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import type { ClientPrincipal, AllowedUser, UsersResponse, Night, AuditLogEntry, AuditLogPage } from '$lib/types';
+  import type { AuthContext, AllowedUser, UsersResponse, Night, AuditLogEntry, AuditLogPage } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { fmtDate, ppg } from '$lib/pokemon';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
 
-  const auth = getContext<{ principal: ClientPrincipal | null; loading: boolean; isMember: boolean; isAdmin: boolean }>(
-    'auth'
-  );
+  const auth = getContext<AuthContext>('auth');
   let isAdmin = $derived(auth.isAdmin);
 
-  let data = $state<UsersResponse>({ admin: '', users: [] });
+  let data = $state<UsersResponse>({ admin: '', adminAlias: null, users: [] });
   let loaded = $state(false);
   let loginInput = $state('');
   let adding = $state(false);
@@ -108,7 +106,7 @@
 
   async function reload() {
     try {
-      data = (await api<UsersResponse>('/api/users')) ?? { admin: '', users: [] };
+      data = (await api<UsersResponse>('/api/users')) ?? { admin: '', adminAlias: null, users: [] };
       loaded = true;
     } catch (e) {
       toast(`Could not load members: ${(e as Error).message}`, true);
@@ -169,7 +167,7 @@
     </div>
   {:else}
     <div class="wrap">
-      <Masthead {isAdmin} principal={auth.principal} />
+      <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
       <h2>League members</h2>
       <div class="sub">
         Whitelist who can sign in and log nights. People sign in with GitHub first, then you add their username here
@@ -202,7 +200,9 @@
           <div class="urow">
             <img class="av" alt="" src={avatarUrl(data.admin)} />
             <div class="who">
-              <div class="login">{data.admin}</div>
+              <div class="login">
+                {#if data.adminAlias}{data.adminAlias} <span class="ghname">- {data.admin}</span>{:else}{data.admin}{/if}
+              </div>
               <div class="meta">league admin (you)</div>
             </div>
             <span class="pill admin">Admin</span>
@@ -215,7 +215,9 @@
           <div class="urow">
             <img class="av" alt="" src={avatarUrl(u.github_login)} />
             <div class="who">
-              <div class="login">{u.github_login}</div>
+              <div class="login">
+                {#if u.alias}{u.alias} <span class="ghname">- {u.github_login}</span>{:else}{u.github_login}{/if}
+              </div>
               <div class="meta">added {u.created_at.slice(0, 10)}</div>
             </div>
             <span class="pill member">Member</span>
@@ -424,6 +426,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .urow .login .ghname {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--muted);
   }
   .urow .meta {
     font-size: 11px;

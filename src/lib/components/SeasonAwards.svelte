@@ -40,7 +40,7 @@
   <div class="awards" transition:slide={{ duration: 220 }}>
     <div class="card" class:mine={isChampion}>
       <div class="emoji">🏆</div>
-      <div class="v name">{champion ? champion.login : '—'}</div>
+      <div class="v name">{champion ? champion.displayName : '—'}</div>
       <div class="k">Champion</div>
       {#if champion}
         {#if isChampion}
@@ -54,7 +54,7 @@
     </div>
     {#if mostAttended}
       <div class="card" class:mine={isMostAttended}>
-        <div class="v name">{mostAttended.login}</div>
+        <div class="v name">{mostAttended.displayName}</div>
         <div class="k">Most nights attended</div>
         <div class="sub">{mostAttended.nights} night{mostAttended.nights === 1 ? '' : 's'}</div>
         {#if isMostAttended}
@@ -66,7 +66,7 @@
       <div class="card" class:mine={isBestDeckOwner}>
         <div class="v gold">{ppg(bestDeck).toFixed(2)}</div>
         <div class="k">Best deck</div>
-        <div class="sub">{bestDeck.deck} · {bestDeck.ownerLogin} · {bestDeck.w}-{bestDeck.t}-{bestDeck.l}</div>
+        <div class="sub">{bestDeck.deck} · {bestDeck.ownerDisplayName} · {bestDeck.w}-{bestDeck.t}-{bestDeck.l}</div>
         {#if isBestDeckOwner}
           <div class="sub gold">That's you!</div>
         {/if}

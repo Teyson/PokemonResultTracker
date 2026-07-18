@@ -76,7 +76,37 @@
     }
     return sorted;
   });
+
+  // The plain (non-searchable) chip row — used for the player's own decks —
+  // only ever shows the first few chips, same "More" pill + dropdown pattern
+  // as SeasonSwitcher.svelte. The caller is responsible for the order (own-
+  // deck lists are pre-sorted by recency in NightForm.svelte); this component
+  // only decides where to cut the row.
+  const VISIBLE_OWN_DECK_COUNT = 3;
+  let ownVisibleDecks = $derived(decks.slice(0, VISIBLE_OWN_DECK_COUNT));
+  let ownOverflowDecks = $derived(decks.slice(VISIBLE_OWN_DECK_COUNT));
+  let selectedOverflowDeck = $derived(
+    ownOverflowDecks.find((d) => (d.id ? d.id === selectedId : d.name === selectedName)) ?? null
+  );
+
+  let moreOpen = $state(false);
+  let moreEl: HTMLDivElement | undefined = $state();
+
+  function pickOverflow(d: DeckOption) {
+    onSelect(d);
+    moreOpen = false;
+  }
+
+  function onDocClick(e: MouseEvent) {
+    if (moreOpen && moreEl && !moreEl.contains(e.target as Node)) moreOpen = false;
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') moreOpen = false;
+  }
 </script>
+
+<svelte:window onclick={onDocClick} onkeydown={onKeydown} />
 
 <div class="field">
   <span class="field-label" id="{idPrefix}Label">{label}</span>
@@ -102,7 +132,7 @@
     {#if clearable}
       <button type="button" class="dchip clear" aria-pressed={!isNew && !selectedName} onclick={onClear}>None</button>
     {/if}
-    {#each visibleDecks as d (d.id ?? d.name)}
+    {#each (searchable ? visibleDecks : ownVisibleDecks) as d (d.id ?? d.name)}
       <button
         type="button"
         class="dchip"
@@ -114,6 +144,37 @@
         {#if d.timesPlayedAgainst}<span class="chipcount">×{d.timesPlayedAgainst}</span>{/if}
       </button>
     {/each}
+    {#if !searchable && ownOverflowDecks.length > 0}
+      <div class="more-wrap" bind:this={moreEl}>
+        <button
+          type="button"
+          class="dchip more-trigger"
+          aria-pressed={!isNew && selectedOverflowDeck !== null}
+          aria-haspopup="true"
+          aria-expanded={moreOpen}
+          onclick={() => (moreOpen = !moreOpen)}
+        >
+          {#if selectedOverflowDeck}<TypeIcon type={selectedOverflowDeck.type} size={16} />{/if}{selectedOverflowDeck
+            ? selectedOverflowDeck.name
+            : 'More'}
+          <span class="chev-sm">▾</span>
+        </button>
+        {#if moreOpen}
+          <div class="more-menu">
+            {#each ownOverflowDecks as d (d.id ?? d.name)}
+              <button
+                type="button"
+                class="more-item"
+                class:active={!isNew && (d.id ? d.id === selectedId : selectedName === d.name)}
+                onclick={() => pickOverflow(d)}
+              >
+                <TypeIcon type={d.type} size={16} />{d.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
     <button type="button" class="dchip new" aria-pressed={isNew} onclick={onSelectNew}>+ New deck</button>
   </div>
   {#if isNew}
@@ -238,6 +299,61 @@
     background: var(--panel2);
     box-shadow: none;
     color: var(--text);
+  }
+  .more-wrap {
+    position: relative;
+    flex: 0 0 auto;
+  }
+  .more-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .chev-sm {
+    font-size: 8px;
+    color: var(--muted2);
+    line-height: 1;
+    transition: transform 0.15s;
+  }
+  .more-trigger[aria-expanded='true'] .chev-sm {
+    transform: rotate(180deg);
+  }
+  .more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    max-height: 260px;
+    overflow-y: auto;
+    min-width: 180px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  .more-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    padding: 8px 10px;
+    white-space: nowrap;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-item:hover {
+    background: var(--panel2);
+  }
+  .more-item.active {
+    color: var(--gold);
   }
   .swatches {
     display: flex;

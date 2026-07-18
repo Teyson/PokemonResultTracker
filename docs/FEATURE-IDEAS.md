@@ -527,6 +527,26 @@ members (the form's deck chips could use it later).
 
 ### 17. Quick-log: repeat last night
 
+> **Status: implemented differently than scoped.** The user's own read on this
+> idea, after hearing the original "Same as last time" button framing: the
+> shortcut button/pre-fill wiring wasn't needed — what actually mattered was
+> not having to hunt for the right deck chip. So the fix is narrower than
+> scoped: `NightForm.svelte`'s own-deck chip list (`deckRegistry()`) is now
+> sorted by most-recently-played-first, explicitly by each deck's latest
+> `date` across the player's nights, rather than left in whatever order the
+> chips happened to be built in. No new button, no pre-fill, no date/W-T-L
+> defaulting beyond what already existed. The common case (same deck as last
+> week) is now "it's already the first chip" rather than "tap a shortcut" —
+> fewer moving parts for the same practical win. No schema or API change.
+> Follow-up, same idea: `DeckPicker.svelte`'s plain (non-searchable) chip row
+> — used only for this own-deck field — now caps itself at the 3 most recent
+> chips plus a "More ▾" pill that opens a dropdown of the rest, still in
+> recency order. Same interaction pattern as `SeasonSwitcher.svelte`'s
+> pill-row-plus-overflow-dropdown (outside-click/Escape-to-close, the trigger
+> relabels itself to the selected item's name when the selection is in the
+> overflow). Keeps the row from growing unbounded as a player's deck history
+> accumulates, without hiding anything — everything is still one click away.
+
 **What.** A one-tap "Same as last time" button on `NightForm` that pre-fills the
 most recent night's deck (and opens W/T/L at 0-0-0 with today's/next Tuesday's
 date), turning the common case into two taps.

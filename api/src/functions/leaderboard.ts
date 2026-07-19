@@ -2,6 +2,7 @@ import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } 
 import { and, eq, gte, lte, isNull, count, sum } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { nights, seasons, users, decks } from '../db/schema';
+import { defaultLeagueId } from '../db/leagues';
 import { getUser, resolveRole } from '../auth';
 import { displayName } from '../db/displayName';
 import type { LeaderboardEntryResponse, LeaderboardResponse, BestDeckResponse } from '../types';
@@ -9,22 +10,24 @@ import type { LeaderboardEntryResponse, LeaderboardResponse, BestDeckResponse } 
 /**
  * /api/leaderboard — season standings across the whole league.
  *
- *   GET /api/leaderboard              -> LeaderboardResponse, all-time totals
- *   GET /api/leaderboard?seasonId=<id> -> same shape, scoped to that season's date range
+ *   GET /api/leaderboard                -> LeaderboardResponse, all-time totals for the default league
+ *   GET /api/leaderboard?seasonId=<id>  -> same shape, scoped to that season's date range
+ *   GET /api/leaderboard?leagueId=<id>  -> same shape, scoped to that league instead of the default one
  *
  * One row per player who has logged at least one league night in the scope,
  * plus one league-wide "best deck" highlight — both aggregated server-side
  * (never raw per-night data: dates and notes stay private to their owner,
  * only W/T/L totals and a deck's name/owner login are shared).
  *
- * Scoped to league nights only (is_league_night = 1) — casual nights never affect
- * standings. Unlike GET /api/nights (own-nights-only unless an admin passes
- * scope=all), this is open to every member: seeing where you rank against the
- * rest of the league is the point of the feature.
+ * Scoped to one league (league_id = <id>, defaulting to the default league)
+ * — casual nights and other leagues' nights never affect standings. Unlike
+ * GET /api/nights (own-nights-only unless an admin passes scope=all), this is
+ * open to every member: seeing where you rank against the rest of the league
+ * is the point of the feature.
  *
- * The seasonId filter is applied server-side (on played_on, before aggregating)
+ * The seasonId/leagueId filters are applied server-side (before aggregating)
  * rather than client-side, so the privacy boundary — members only ever see
- * aggregate totals, never raw nights — holds for season views too.
+ * aggregate totals, never raw nights — holds for season and league views too.
  */
 
 // A deck needs more than this many nights logged to be eligible for the
@@ -55,8 +58,21 @@ app.http('leaderboard', {
         seasonRange = found;
       }
 
+      const leagueIdParam = request.query.get('leagueId');
+      let leagueId: number | null;
+      if (leagueIdParam !== null) {
+        leagueId = Number(leagueIdParam);
+        if (!Number.isInteger(leagueId)) return { status: 400, jsonBody: { error: 'Invalid leagueId.' } };
+      } else {
+        leagueId = await defaultLeagueId(db);
+      }
+      // No league exists yet (fresh install, before any league is created) — nothing to scope to.
+      if (leagueId === null) {
+        return { jsonBody: { entries: [], bestDeck: null } satisfies LeaderboardResponse };
+      }
+
       const scopeFilter = and(
-        eq(nights.isLeagueNight, true),
+        eq(nights.leagueId, leagueId),
         isNull(nights.deletedAt),
         seasonRange ? gte(nights.playedOn, seasonRange.startsOn) : undefined,
         seasonRange?.endsOn ? lte(nights.playedOn, seasonRange.endsOn) : undefined

@@ -5,6 +5,7 @@ import { alias } from 'drizzle-orm/mssql-core';
 import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { upsertOwnedDeck, upsertOpponentDeck } from '../db/decks';
+import { resolveNightLeagueId } from '../db/leagues';
 import { ensureUser } from '../db/userDirectory';
 import { displayName } from '../db/displayName';
 import { logAudit } from '../db/auditLog';
@@ -80,6 +81,9 @@ const nightInputSchema = z
     l: nonNegativeInt,
     notes: z.preprocess((v) => (typeof v === 'string' && v.trim() ? v.trim() : null), z.string().nullable()),
     isLeagueNight: z.boolean().optional().default(true),
+    // Which league a league night belongs to. Omitted defaults to the active
+    // league (resolveNightLeagueId); ignored when isLeagueNight is false.
+    leagueId: z.coerce.number().int().positive().optional(),
     // Detailed mode: when present, replaces the night's per-match log and the
     // w/t/l totals are derived from it instead of the fields above. Absent
     // (quick mode) leaves any existing matches untouched.
@@ -97,6 +101,7 @@ const SELECT_COLUMNS = {
   l: nights.losses,
   notes: nights.notes,
   isLeagueNight: nights.isLeagueNight,
+  leagueId: nights.leagueId,
   // Owner display name comes from the joined users row, so it always reflects
   // the owner's current GitHub login.
   createdBy: users.githubLogin,
@@ -124,15 +129,17 @@ function toResponse(row: {
   l: number;
   notes: string | null;
   isLeagueNight: boolean;
+  leagueId: number | null;
   createdBy: string;
   createdByAlias: string | null;
   deletedAt?: Date | null;
 }): NightResponse {
-  const { deletedAt, createdByAlias, ...rest } = row;
+  const { deletedAt, createdByAlias, leagueId, ...rest } = row;
   return {
     ...rest,
     id: String(row.id),
     type: row.type ?? 'Colorless',
+    leagueId: leagueId === null ? null : String(leagueId),
     createdByDisplay: displayName(row.createdBy, createdByAlias),
     ...(deletedAt ? { deletedAt: deletedAt.toISOString() } : {})
   };
@@ -364,6 +371,14 @@ app.http('nights', {
         return { status: 400, jsonBody: { error: parsed.error.issues[0]?.message ?? 'Invalid request body.' } };
       }
       const input = parsed.data;
+      // Single write-path mapping between isLeagueNight and leagueId (see
+      // resolveNightLeagueId) so the two columns can't drift while both exist.
+      let leagueId: number | null;
+      try {
+        leagueId = await resolveNightLeagueId(db, input.isLeagueNight, input.leagueId);
+      } catch (e) {
+        return { status: 400, jsonBody: { error: (e as Error).message } };
+      }
       // Resolved up front (not just in the POST branch) since the player's own
       // deck is now looked up/created scoped to their ownerId on PUT too.
       const ownerId = await ensureUser(db, user.userId, user.userDetails);
@@ -389,6 +404,7 @@ app.http('nights', {
               losses: totals.l,
               notes: input.notes,
               isLeagueNight: input.isLeagueNight,
+              leagueId,
               ownerId
             });
           const id = inserted[0].id;
@@ -416,7 +432,8 @@ app.http('nights', {
             ties: totals.t,
             losses: totals.l,
             notes: input.notes,
-            isLeagueNight: input.isLeagueNight
+            isLeagueNight: input.isLeagueNight,
+            leagueId
           })
           .where(eq(nights.id, id));
         await writeMatches(tx, id, resolvedMatches ?? []);

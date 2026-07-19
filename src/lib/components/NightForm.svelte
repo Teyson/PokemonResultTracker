@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Night, NightInput, DeckSummary } from '$lib/types';
   import { recentTuesday, isTuesday, todayISO } from '$lib/pokemon';
+  import { leagueState, loadLeagues } from '$lib/league.svelte';
   import DeckPicker, { type DeckOption } from './DeckPicker.svelte';
   import { slide } from 'svelte/transition';
 
@@ -102,6 +103,29 @@
   let isLeagueNight = $state(true);
   let saving = $state(false);
 
+  // The night's own league, from when it was originally logged (edit mode
+  // only) — kept separate from the nav's active-league selection so editing a
+  // Summer Cup night while Tuesday is active in the nav doesn't silently
+  // re-link it to Tuesday. leagueToggled tracks whether the user has actually
+  // clicked the League/Casual buttons this session (the isTuesday auto-default
+  // on date change does NOT count) — only then does save() use the active
+  // league instead of preserving the night's own one.
+  let ownLeagueId = $state<string | null>(null);
+  let leagueToggled = $state(false);
+
+  $effect(() => {
+    loadLeagues();
+  });
+
+  let unarchivedLeagues = $derived(leagueState.leagues.filter((l) => !l.archivedAt));
+  let displayedLeagueId = $derived(editing && !leagueToggled ? ownLeagueId : leagueState.activeLeagueId);
+  let displayedLeagueName = $derived(leagueState.leagues.find((l) => l.id === displayedLeagueId)?.name ?? null);
+
+  function setNightType(v: boolean) {
+    isLeagueNight = v;
+    leagueToggled = true;
+  }
+
   $effect(() => {
     if (editing) {
       date = editing.date;
@@ -113,6 +137,8 @@
       t = editing.t;
       l = editing.l;
       isLeagueNight = editing.isLeagueNight;
+      ownLeagueId = editing.leagueId;
+      leagueToggled = false;
       detailed = (editing.matches?.length ?? 0) > 0;
       matchRows =
         editing.matches?.map((m) => ({
@@ -136,6 +162,8 @@
       t = 0;
       l = 0;
       isLeagueNight = true;
+      ownLeagueId = null;
+      leagueToggled = false;
       detailed = true;
       matchRows = [];
     }
@@ -232,6 +260,10 @@
 
   async function save() {
     const finalDeck = (newDeck ? newDeckName.trim() : deck) || 'Untitled deck';
+    // Preserves the night's own league on an unrelated edit (see the
+    // ownLeagueId/leagueToggled comment above) rather than silently re-linking
+    // it to whatever league happens to be active in the nav right now.
+    const leagueId = isLeagueNight ? (displayedLeagueId ?? undefined) : undefined;
     saving = true;
     try {
       const input = detailed
@@ -243,9 +275,10 @@
             t,
             l,
             isLeagueNight,
+            leagueId,
             matches: matchRows.map((r) => ({ result: r.result, ...resolveOpponent(r), ...resolveWentFirst(r) }))
           }
-        : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l, isLeagueNight };
+        : { date: date || recentTuesday(), deck: finalDeck, type, w, t, l, isLeagueNight, leagueId };
       await onSave(input, editing?.id ?? null);
     } finally {
       saving = false;
@@ -273,13 +306,14 @@
           type="button"
           class="nighttypebtn"
           aria-pressed={isLeagueNight}
-          onclick={() => (isLeagueNight = true)}>League</button
+          onclick={() => setNightType(true)}
+          >{unarchivedLeagues.length > 1 && displayedLeagueName ? displayedLeagueName : 'League'}</button
         >
         <button
           type="button"
           class="nighttypebtn"
           aria-pressed={!isLeagueNight}
-          onclick={() => (isLeagueNight = false)}>Casual</button
+          onclick={() => setNightType(false)}>Casual</button
         >
       </div>
     </div>

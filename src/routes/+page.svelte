@@ -5,6 +5,7 @@
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
   import { nightInSeason, currentSeasonId, startedSeasons, todayISO } from '$lib/pokemon';
+  import { leagueState, setActiveLeague, loadLeagues } from '$lib/league.svelte';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Scoreboard from '$lib/components/Scoreboard.svelte';
   import Records from '$lib/components/Records.svelte';
@@ -43,6 +44,7 @@
     if (isMember && !seasonsLoaded) {
       loadSeasons();
     }
+    if (isMember) loadLeagues();
   });
 
   // Auto-select the current season only once, the first time seasons finish
@@ -63,6 +65,35 @@
   let displayNights = $derived(
     selectedSeasonId === 'all' || !selectedSeason ? nights : nights.filter((n) => nightInSeason(n, selectedSeason as Season))
   );
+
+  // Casual nights plus the active league's league nights; other leagues' nights
+  // are hidden (not just badged) from every view that must agree with the
+  // visible Nights list — Scoreboard, DeckTable (which also holds the trend
+  // chart), and NightsList itself. Records, Badges, and the calendar heatmap
+  // deliberately stay on the full `nights` array (lifetime views by nature).
+  // Unfiltered until the league list has actually loaded, so there's no flash
+  // of an empty scoreboard while activeLeagueId is still null.
+  let leagueVisibleNights = $derived(
+    !leagueState.loaded || leagueState.activeLeagueId === null
+      ? displayNights
+      : displayNights.filter((n) => !n.isLeagueNight || n.leagueId === leagueState.activeLeagueId)
+  );
+
+  // Nights hidden by the league filter above, grouped by their (other) league,
+  // for the "N nights in other leagues" hint under the Nights list.
+  let hiddenByOtherLeague = $derived.by(() => {
+    const counts = new Map<string, number>();
+    if (leagueState.loaded && leagueState.activeLeagueId !== null) {
+      for (const n of displayNights) {
+        if (n.isLeagueNight && n.leagueId !== null && n.leagueId !== leagueState.activeLeagueId) {
+          counts.set(n.leagueId, (counts.get(n.leagueId) ?? 0) + 1);
+        }
+      }
+    }
+    return [...counts.entries()]
+      .map(([leagueId, count]) => ({ leagueId, count, name: leagueState.leagues.find((l) => l.id === leagueId)?.name ?? 'Unknown' }))
+      .sort((a, b) => b.count - a.count);
+  });
 
   async function loadNights() {
     try {
@@ -172,7 +203,7 @@
         <SeasonProgress seasons={seasonsList} {selectedSeason} />
       {/if}
 
-      <Scoreboard nights={displayNights} />
+      <Scoreboard nights={leagueVisibleNights} />
       <Records {nights} />
       <NightForm
         {nights}
@@ -183,7 +214,7 @@
         onCancel={() => (editing = null)}
       />
 
-      <DeckTable nights={displayNights} showOwner={isAdmin && viewScope === 'all'} />
+      <DeckTable nights={leagueVisibleNights} showOwner={isAdmin && viewScope === 'all'} />
 
       <CalendarHeatmap {nights} />
 
@@ -204,7 +235,19 @@
         <span class="chev">{nightsOpen ? '▴' : '▾'}</span>
       </div>
       {#if nightsOpen}
-        <NightsList nights={displayNights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+        <NightsList nights={leagueVisibleNights} showOwner={isAdmin && viewScope === 'all'} onEdit={startEdit} onDelete={handleDelete} />
+        {#if hiddenByOtherLeague.length > 0}
+          <div class="league-hint">
+            {hiddenByOtherLeague.reduce((sum, h) => sum + h.count, 0)} night{hiddenByOtherLeague.reduce((sum, h) => sum + h.count, 0) === 1
+              ? ''
+              : 's'} in other leagues:
+            {#each hiddenByOtherLeague as h, i (h.leagueId)}{i > 0 ? ', ' : ' '}<button
+                type="button"
+                class="league-hint-link"
+                onclick={() => setActiveLeague(h.leagueId)}>{h.name} ({h.count})</button
+              >{/each}
+          </div>
+        {/if}
       {/if}
 
       <Badges {nights} />
@@ -252,6 +295,26 @@
     user-select: none;
   }
   .section-title.toggle:hover {
+    color: var(--text);
+  }
+  .league-hint {
+    color: var(--muted2);
+    font-size: 11px;
+    text-align: center;
+    padding: 8px 4px 2px;
+    line-height: 1.6;
+  }
+  .league-hint-link {
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+  }
+  .league-hint-link:hover {
     color: var(--text);
   }
   .chev {

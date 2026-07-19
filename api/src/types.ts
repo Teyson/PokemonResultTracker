@@ -17,6 +17,9 @@ export interface NightResponse {
   l: number;
   notes: string | null;
   isLeagueNight: boolean;
+  // Which named league this night belongs to; null for casual nights. Kept in
+  // sync with isLeagueNight (leagueId set <=> isLeagueNight = true) by nights.ts.
+  leagueId: string | null;
   createdBy: string;
   // The owner's alias if they've set one, else the same value as createdBy —
   // use this (not createdBy) whenever the owner's name is shown to other
@@ -67,6 +70,13 @@ export interface SeasonResponse {
   name: string;
   startsOn: string;
   endsOn: string | null;
+}
+
+/** A named competitive context, e.g. "Tuesday League". archivedAt null means active (visible in pickers). */
+export interface LeagueResponse {
+  id: string;
+  name: string;
+  archivedAt: string | null;
 }
 
 /** One player's season totals for the leaderboard — league nights only, never per-night detail. */

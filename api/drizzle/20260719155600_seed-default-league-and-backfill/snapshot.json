@@ -1,0 +1,905 @@
+{
+  "id": "db595d0e-9e1b-42a6-b130-df8889a36b4d",
+  "prevIds": [
+    "aca682a6-db91-48ee-9974-e5beabe9bb81"
+  ],
+  "version": "2",
+  "dialect": "mssql",
+  "ddl": [
+    {
+      "name": "allowed_users",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "audit_log",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "decks",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "leagues",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "matches",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "nights",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "seasons",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "name": "users",
+      "entityType": "tables",
+      "schema": "dbo"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "github_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(20)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "added_by",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "allowed_users"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "actor_user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "actor_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "nvarchar(50)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "action",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "nvarchar(500)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "detail",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "audit_log"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "int",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "owner_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "nvarchar(50)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "energy_type",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "decks"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "leagues"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "leagues"
+    },
+    {
+      "type": "datetime2",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "archived_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "leagues"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "leagues"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "night_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "round_no",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "nvarchar(1)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "result",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "int",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "opponent_deck_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "bit",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "went_first",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "matches"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "date",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "played_on",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "deck_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "wins",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "ties",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "losses",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "nvarchar(500)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "notes",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "bit",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "is_league_night",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "league_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "owner_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "datetime2",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "nights"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "seasons"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "seasons"
+    },
+    {
+      "type": "date",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "starts_on",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "seasons"
+    },
+    {
+      "type": "date",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "ends_on",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "seasons"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "seasons"
+    },
+    {
+      "type": "int",
+      "notNull": true,
+      "generated": null,
+      "identity": {
+        "seed": 1,
+        "increment": 1
+      },
+      "name": "id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "nvarchar(200)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "nvarchar(100)",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "github_login",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "nvarchar(50)",
+      "notNull": false,
+      "generated": null,
+      "identity": null,
+      "name": "alias",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "datetime2",
+      "notNull": true,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "schema": "dbo",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "owner_id",
+        "name"
+      ],
+      "name": "decks_owner_id_name_unique",
+      "entityType": "uniques",
+      "table": "decks",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "owner_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "decks_owner_id_users_id_fk",
+      "entityType": "fks",
+      "table": "decks",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "night_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "nights",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "matches_night_id_nights_id_fk",
+      "entityType": "fks",
+      "table": "matches",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "opponent_deck_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "decks",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "matches_opponent_deck_id_decks_id_fk",
+      "entityType": "fks",
+      "table": "matches",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "deck_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "decks",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "nights_deck_id_decks_id_fk",
+      "entityType": "fks",
+      "table": "nights",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "league_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "leagues",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "nights_league_id_leagues_id_fk",
+      "entityType": "fks",
+      "table": "nights",
+      "schema": "dbo"
+    },
+    {
+      "columns": [
+        "owner_id"
+      ],
+      "nameExplicit": false,
+      "schemaTo": "dbo",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "nights_owner_id_users_id_fk",
+      "entityType": "fks",
+      "table": "nights",
+      "schema": "dbo"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "allowed_users_pkey",
+      "table": "allowed_users",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "audit_log_pkey",
+      "table": "audit_log",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "decks_pkey",
+      "table": "decks",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "leagues_pkey",
+      "table": "leagues",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "matches_pkey",
+      "table": "matches",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "nights_pkey",
+      "table": "nights",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "seasons_pkey",
+      "table": "seasons",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "id"
+      ],
+      "name": "users_pkey",
+      "table": "users",
+      "schema": "dbo",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "github_login"
+      ],
+      "name": "allowed_users_github_login_key",
+      "schema": "dbo",
+      "table": "allowed_users",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "name": "users_user_id_key",
+      "schema": "dbo",
+      "table": "users",
+      "entityType": "uniques"
+    },
+    {
+      "column": "role",
+      "nameExplicit": false,
+      "default": "('member')",
+      "name": "allowed_users_role_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "allowed_users"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "allowed_users_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "allowed_users"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "audit_log_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "audit_log"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "decks_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "decks"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "leagues_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "leagues"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "matches_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "matches"
+    },
+    {
+      "column": "wins",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_wins_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "ties",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_ties_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "losses",
+      "nameExplicit": false,
+      "default": "((0))",
+      "name": "nights_losses_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "is_league_night",
+      "nameExplicit": false,
+      "default": "(1)",
+      "name": "nights_is_league_night_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "nights_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "nights"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "seasons_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "seasons"
+    },
+    {
+      "column": "created_at",
+      "nameExplicit": false,
+      "default": "(SYSUTCDATETIME())",
+      "name": "users_created_at_default",
+      "entityType": "defaults",
+      "schema": "dbo",
+      "table": "users"
+    }
+  ],
+  "renames": []
+}

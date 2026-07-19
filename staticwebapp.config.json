@@ -8,6 +8,7 @@
     { "route": "/admin", "rewrite": "/admin.html" },
     { "route": "/decks", "rewrite": "/decks.html" },
     { "route": "/leaderboard", "rewrite": "/leaderboard.html" },
+    { "route": "/leagues", "rewrite": "/leagues.html" },
     { "route": "/profile", "rewrite": "/profile.html" },
     { "route": "/seasons", "rewrite": "/seasons.html" },
     { "route": "/api/nights*", "allowedRoles": ["authenticated"] },

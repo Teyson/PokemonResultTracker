@@ -1,6 +1,6 @@
 # Feature ideas backlog
 
-Seventy well-scoped feature ideas for the Pokémon Result Tracker. This file is written
+Eighty well-scoped feature ideas for the Pokémon Result Tracker. This file is written
 for an implementing agent (or human) picking up **one** idea and building it end-to-end.
 Each idea explains what it is, why it's worth doing, how it maps onto this codebase,
 an effort estimate, and the pitfalls specific to this repo's architecture.
@@ -2269,6 +2269,491 @@ neutral framings only ("first night with X", not "your 0–4").
 
 ---
 
+## I. Inspired by other PTCG trackers (Training Court, Trainer Hill)
+
+Ideas 71–78 come from surveying two established community tools:
+[Training Court](https://trainingcourt.app) (a solo practice/tournament
+tracker whose headline feature is parsing pasted PTCG Live battle logs) and
+[Trainer Hill](https://www.trainerhill.com) (a tournament-data meta-analytics
+site with practice tools). Features those tools have that this backlog
+already covers are *not* repeated here — decklist import/export is #60, deck
+art is #25/#61, text recaps and CSV export are #63/#22, and Trainer Hill's
+matchup grid is essentially #3. What remains is what neither the app nor
+ideas 1–70 have.
+
+### 71. PTCG Live battle-log import
+
+**What.** Paste a PTCG Live battle log into the detailed-night match row and
+have the app fill the match in: W/T/L from the log's outcome line, `wentFirst`
+from turn 1, and a *suggested* opponent deck from the Pokémon that appeared —
+one paste instead of four taps. Training Court's headline feature, scoped down
+to this app's match model.
+
+**Why.** Detailed logging (opponent deck, turn order) is the app's richest
+data and also its highest-friction entry path. Most league members practice on
+PTCG Live between Tuesdays; the log is already on their clipboard culture-wise
+(it's how games get shared on Discord). This makes the *casual-night* data as
+rich as the league-night data with less effort, not more.
+
+**How.**
+- Phase 1 is frontend-only: a pure parser module `src/lib/battlelog.ts`. The
+  log is plain text with a stable shape — player names appear in the setup
+  lines, turns are delimited by `Turn # N - <name>'s turn`, and a
+  `<name> wins` line ends it. Extract: both player names, who took turn 1,
+  the winner, and the set of Pokémon each side put into play.
+- The app doesn't know which player is "you": after the first paste, show a
+  two-button "which one are you?" prompt and remember the chosen screen name
+  in `localStorage` (a `users` column is overkill until someone asks for
+  cross-device).
+- Opponent deck suggestion: match the opponent's most-prominent Pokémon names
+  against the existing decks registry (the case-insensitive matching
+  `DeckPicker`/`DeckTable` already use); pre-select on a confident hit,
+  otherwise leave the picker untouched. A suggestion, never an auto-commit.
+- UI: a "paste log" affordance on the detailed-mode match row in
+  `NightForm.svelte` that expands a textarea; parsing fills the existing
+  controls, which stay editable.
+
+**Effort:** M (the parser is the work; everything it writes to already
+exists). **Depends on:** 1 (shipped). **Pairs with:** 72 (storage/replay), 61
+(archetype-keyed suggestions once tags exist).
+**Pitfalls.** The log format is unversioned and undocumented — PTCGL updates
+can change wording. Parse defensively: any line that doesn't match is skipped,
+any missing fact leaves its form control alone, and a failed parse must
+degrade to "nothing happened" rather than a broken form. Don't guess the
+result from mid-log state (concessions produce short logs); only trust the
+explicit outcome line.
+
+### 72. Stored battle logs & turn-by-turn viewer
+
+**What.** Optionally keep the pasted log (71) attached to the match, and
+render it as readable, styled turns — grouped per turn, your turns visually
+distinct from the opponent's — instead of PTCGL's wall of text. Training
+Court's second act: "visualizing the game like this helps with understanding
+mistakes made in practice."
+
+**Why.** "What did I misplay in round 3?" currently has no answer once the
+game window closes. The league's culture of dissecting each other's games gets
+a permanent, linkable home per match.
+
+**How.**
+- Schema: a separate `match_logs` table (`id`, `matchId` FK → `matches.id`
+  unique, `content`, `createdAt`) rather than a column on `matches` — logs
+  are huge and most matches won't have one, so keep the hot table lean.
+- Rendering: reuse `src/lib/battlelog.ts` (71) to split into turns
+  client-side; a foldout on the match row in `NightsList.svelte`'s detailed
+  view. Render as text nodes only.
+- API: accept an optional `rawLog` on the match objects in `nights.ts`
+  POST/PUT (Zod: max length bound), write to `match_logs` in the same
+  transaction as the match rows.
+
+**Effort:** M. **Depends on:** 71.
+**Pitfalls.** Size: real PTCGL logs run well past `nvarchar(4000)` — this
+table genuinely needs `nvarchar(max)`; verify the rc Drizzle build supports
+`length: 'max'` *before* starting, and if it doesn't, store a bounded prefix
+and say so in the UI rather than upgrading packages (the #60 pitfall's rule).
+Logs contain both players' screen names — that's the member's own pasted
+content, same privacy class as notes, so keep logs out of every response
+except the owner's/admin's own-night detail (mirror how notes behave).
+
+### 73. External tournament log
+
+**What.** Track tournaments a member attends *outside* the league — a League
+Challenge at another store, a Regional — with the fields Training Court
+attaches to a tournament: name, date, category (Challenge/Cup/Regional/other),
+final placement, deck played, and per-round results with opponent decks.
+
+**Why.** Section G covers nights this league runs itself, and #51 imports the
+league's own sanctioned events — but nothing covers the tournaments members
+travel to, which are exactly the results people most want to remember. Today
+those either pollute a "casual night" or go unrecorded.
+
+**How.**
+- Make a tournament a *wrapper around an ordinary personal night* rather than
+  a parallel stats world (the section-G lesson): a `tournaments` table (`id`,
+  `ownerId` FK → `users.id`, `name nvarchar(100)`, `category nvarchar(20)` —
+  Zod enum, `placement int` nullable, `playersCount int` nullable,
+  `createdAt`) plus a nullable `tournamentId` FK on `nights`. The night
+  carries the date, deck, and per-round `matches` rows with the existing
+  machinery; the tournament row carries only what a night can't.
+- Log with `isLeagueNight = 0` so tournament games never touch league
+  scoring/leaderboard — but they *do* flow into the owner's own deck stats,
+  matchup matrix, and turn-order breakdowns for free, because those read
+  `nights`/`matches`.
+- API: a small `tournaments.ts` function (owner-scoped CRUD, the `nights.ts`
+  auth skeleton); `nights.ts` GET joins the tournament fields onto nights
+  that have one.
+- Frontend: create/edit from `NightForm.svelte` via an "this was a
+  tournament" disclosure (name/category/placement fields); `NightsList.svelte`
+  renders a placement badge ("🏆 3rd of 24") on tournament nights.
+
+**Effort:** M. **Depends on:** 1 (shipped). **Pairs with:** 59 (placements on
+profiles), 60 (the list you played).
+**Pitfalls.** Resist a separate results pipeline — if tournament rounds
+aren't ordinary `matches` rows, every stats view forks. Placement is
+self-reported and optional; don't require `playersCount` to save. Decide
+visibility explicitly: tournament nights are personal nights, so they inherit
+the existing owner-only boundary — placements only become social if/when #59
+grows a section for them.
+
+### 74. Format & rotation awareness
+
+**What.** A first-class notion of the Standard format a night was played in
+(e.g. "G-on", "H-on"), derived from the date — with a format filter on the
+deck foldout's matchup/opponent breakdowns and a soft warning when a stats
+view aggregates across a rotation boundary.
+
+**Why.** Standard rotates every April; matchup and win-rate data from before
+a rotation quietly stops meaning anything ("my 60% into Lugia" was against a
+deck that no longer exists). Trainer Hill filters everything by format for
+exactly this reason. Without it, the app's stats get *worse* the longer the
+league runs — the opposite of what a tracker is for.
+
+**How.**
+- Follow the seasons pattern exactly (#9's no-FK design): a `formats` table
+  (`id`, `name nvarchar(20)`, `startsOn date not null`, `endsOn date`
+  nullable = current), membership derived from `played_on` at read time via a
+  `nightInFormat` helper next to `nightInSeason` in `src/lib/pokemon.ts`.
+  Admin-managed from `/seasons` (retitle the page "Seasons & formats" —
+  they're the same kind of admin-curated date partition; one rotation entry
+  per year is the whole maintenance burden).
+- Frontend: a format chip in the deck foldout's matchup/opponent sections
+  (defaulting to the current format once more than one exists), and a muted
+  "spans N formats" note on all-time aggregates.
+- No API change beyond `formats` CRUD mirroring `seasons.ts`.
+
+**Effort:** S–M. **Pairs with:** 9 (shared pattern), 61 (archetypes rotate
+too).
+**Pitfalls.** Don't tag decks with formats — a deck name persists across
+rotations even when its list changes (#60's versioning covers that side).
+Formats and seasons deliberately don't align (a league season can straddle
+April); never merge the two tables, just render both context strips.
+
+### 75. Match tags — one-tap "why it went that way"
+
+**What.** A small fixed vocabulary of optional tags on each detailed match,
+borrowed nearly verbatim from Trainer Hill's Battle Journal: *ahead early,
+behind early, slow start, lucky, got donked, donked opp, dead drew, prizes
+hurt, never punished, gg*. Toggle chips at log time; tag-aware stats later
+("4 of 6 Gardevoir losses are tagged *dead drew*").
+
+**Why.** W/L records why-less: a 2–3 night of coin-flip games and a 2–3 night
+of unwinnable stomps read identically forever. Tags capture the *texture* of
+games at the moment it's known, for one tap — and in a league of friends the
+tags are half banter, which is exactly why they'll actually get used. The
+closest existing idea, #62, captures closeness numerically; tags capture
+cause, and the two compose.
+
+**How.**
+- Schema: follow idea 5's compact-string precedent — a nullable
+  `tags nvarchar(200)` on `matches` holding comma-separated tag keys, with
+  the vocabulary defined once as a Zod enum in `nights.ts` and mirrored in a
+  `src/lib/tags.ts` (key → label/emoji map).
+- Frontend: a wrapping row of small toggle chips under the match row's
+  existing controls in `NightForm.svelte` (collapsed behind a "tags" reveal
+  so quick loggers never see them). Display: tiny emoji chips on match strips
+  in `NightsList.svelte` with the label on hover/tap.
+- Stats: a per-deck tag-count breakdown as one more collapsible subsection in
+  `DeckTable.svelte`'s foldout (the #7 pattern), splitting counts by
+  win/loss so "lucky wins" and "dead-drew losses" fall out naturally.
+
+**Effort:** S–M. **Depends on:** 1 (shipped). **Pairs with:** 62, 71 (a
+parsed log could pre-suggest *got donked* from game length).
+**Pitfalls.** Keep the vocabulary fixed and small — free-text tags fragment
+into unaggregatable noise, and adding a tag key later is a one-line enum
+diff. Tags are subjective self-reporting; keep them out of anything
+competitive (no leaderboard column) so nobody sandbagging *lucky* on
+opponents' wins becomes a league argument.
+
+### 76. League meta share & trends
+
+**What.** Trainer Hill's meta page, for our own tiny meta: what share of
+league nights each deck was piloted, per season, with ▲/▼ movement against
+the previous season — and optionally a stacked-area "our meta over time"
+chart.
+
+**Why.** #35 answers "am *I* improving season over season"; nothing answers
+"what is our league's meta and how is it shifting". Deck diversity is a
+league-health number (three decks at 80% share is a stale league), and
+"Gardevoir is on the rise" is exactly the kind of shared narrative that keeps
+a weekly league talking.
+
+**How.**
+- Cross-player deck data is already aggregate-shared (`/api/leaderboard`'s
+  `bestDeck` set the precedent, #31/#33 widened it deliberately): extend the
+  leaderboard handler with a `metaShare` block — per-deck night counts for
+  the requested season, grouped in SQL by deck id, same
+  league-night/season-range filters as the standings query. No raw nights
+  cross the privacy boundary.
+- Frontend: a "Meta" collapsible on `/leaderboard` behind the existing
+  `SeasonSwitcher` — a bar list (deck, owner display name, share %, ▲/▼ vs
+  the previous season, fetched the way `HallOfFame.svelte` already resolves
+  per-season leaderboard calls). The stacked-area chart is a follow-up, not
+  v1 — the bar list is the value.
+- Movement needs two seasons of data minimum; render nothing rather than
+  arrows against an empty previous season.
+
+**Effort:** M. **Depends on:** 9, 32 (both shipped). **Pairs with:** 31, 61
+(share by archetype once tags exist — two players' "Charizard" builds should
+count as one meta entry).
+**Pitfalls.** Share of *nights*, not games — a 12-game grinder night
+shouldn't triple a deck's meta presence; say which denominator is used in the
+UI. Small-league percentages swing wildly (one player switching decks moves
+~15%) — show counts alongside percentages so nobody reads statistical noise
+as a trend.
+
+### 77. Community-standard win rates (ties as ⅓)
+
+**What.** Wherever the app shows a win percentage, adopt the community
+convention Trainer Hill defaults to: a tie counts as a third of a win,
+`(W + T/3) / (W + L + T)`.
+
+**Why.** Comparability — when a league member reads "Gardevoir is 55% into
+Raging Bolt" on Trainer Hill and their own foldout says 48%, the numbers
+should disagree about *their games*, not about arithmetic. The neat part:
+this app's own scoring already agrees — PPG on the 3/1/0 scale divided by 3
+*is* exactly this formula — so the convention makes win% consistent with PPG
+too, not just with the outside world.
+
+**How.**
+- An audit, not a mechanism: add one `winRate(w, t, l)` helper to
+  `src/lib/pokemon.ts` next to `pts`/`ppg`, then sweep every place a
+  percentage is currently computed (`DeckTable.svelte`'s matchup/opponent
+  cells, `MatchupMatrix`, records/awards modules if any show %) onto it.
+  Delete the local computations.
+- Label it once, in the matchup favorability legend/tooltip ("ties count as
+  ⅓ win"), not on every cell.
+
+**Effort:** S.
+**Pitfalls.** This visibly shifts existing displayed numbers for anyone with
+tie history — one line in the PR description ("win% now counts ties as ⅓,
+matching PPG and community convention") turns a bug report into a release
+note. Don't make it a settings toggle; two people quoting different numbers
+from the same app is worse than either convention.
+
+### 78. Decklist diff
+
+**What.** Given #60's versioned decklists, a compare view: this list vs its
+previous version (or any two lists) as a three-column change summary — cards
+cut, counts changed, cards added — the table half of Trainer Hill's deck-diff
+tools (the Venn diagram is the gimmick; the table is the utility).
+
+**Why.** #60 stores versions but gives no way to see what changed between
+them. "What did I cut for the third Iono, and did the deck get better?" is
+the whole reason a player keeps versions — and next to each version's
+date-range results, the diff quietly becomes A/B data for the deck's builds.
+
+**How.**
+- Pure frontend over #60's parse: `src/lib/decklistDiff.ts` takes two parsed
+  lists, keys cards by `name + setCode + number`, returns
+  `{ added, removed, changed }` with count deltas.
+- UI: in the deck foldout's list section (#60's home), a version picker
+  defaulting to "current vs previous", rendering the three groups with
+  `+n/−n` count chips. Optionally show each version's W-T-L over the dates it
+  was current (derivable from `deck_lists.createdAt` ranges against the
+  deck's nights — same derive-at-read-time stance as everything else).
+- No API or schema change beyond #60's.
+
+**Effort:** S (given 60). **Depends on:** 60.
+**Pitfalls.** Reprints: the same card under two set codes diffs as
+cut-and-add — key by name alone for the *changed* bucket and mention the set
+code only in the detail line, or every rotation reprint looks like a rebuild.
+Keep the per-version results panel honest about tiny samples (the #57
+small-sample rule: show game counts, no editorializing).
+
+---
+
+## J. Multiple leagues
+
+Requested directly by the user (July 2026): the league is outgrowing the
+single `isLeagueNight` boolean — a second competitive context (a big
+tournament series, a second weekly league) currently has nowhere to live that
+doesn't either pollute the Tuesday standings or vanish into the undifferentiated
+"casual" bucket.
+
+### 79. Leagues — named competitive contexts
+
+**What.** A `leagues` registry ("Tuesday League", "Summer Cup 2026", …) that a
+night belongs to, replacing the binary league/casual split with
+*casual | which league*. The leaderboard, season awards, and league-scoped
+stats all become per-league; Tuesday standings never see the big tournament's
+games and vice versa.
+
+**Why.** `nights.isLeagueNight` encodes exactly one competitive context. The
+moment a second one exists, every choice is wrong: log its games as league
+nights and the Tuesday leaderboard/season awards absorb them; log them casual
+and they're invisible in standings entirely. A league entity is the general
+fix, and it's *not* redundant with the neighboring ideas: #73 covers a
+tournament a member attends alone (owner-scoped, no shared standings), and a
+section-G event is one shared night — an ongoing second competition with its
+own standings across multiple nights is a league.
+
+**How.**
+- Schema: `leagues` (`id` identity PK, `name nvarchar(100) not null`,
+  `archivedAt datetime2` nullable — hides it from pickers, keeps history,
+  the #68 retirement pattern; `createdAt`), plus a nullable `leagueId int`
+  FK on `nights`. **Semantics after backfill (user's decision):** `leagueId`
+  null → casual night; `leagueId` set → that league's night. Every night
+  logged before this feature is either casual or from the Tuesday league at
+  Spilforsyningen, so the backfill is unambiguous.
+- Backfill: two migrations. First the generated DDL migration
+  (`npm run db:generate` as usual), then a **custom** data migration —
+  `drizzle-kit generate --custom` produces an empty migration file meant for
+  hand-written SQL, which is not the same as hand-editing *generated* SQL
+  (CLAUDE.md's prohibition): insert the league named exactly
+  **`Spilforsyningen Tirsdag`**, then
+  `UPDATE nights SET league_id = <its id> WHERE is_league_night = 1 AND
+  league_id IS NULL` (the `IS NULL` guard makes a re-run harmless). Verify
+  both against the Docker DB before the PR — production runs them
+  automatically on merge (the `migrate_database` job), so this is the repo's
+  first data migration and it must be right the first time.
+- `isLeagueNight` becomes fully derivable (`league_id IS NOT NULL`). Don't
+  drop it in the same PR: keep writing both in sync (one shared mapping in
+  `nights.ts`, never two code paths), migrate every reader to `leagueId`,
+  and drop the column in a follow-up migration once nothing reads the bit.
+- API: a small `leagues.ts` mirroring `seasons.ts` — GET (member);
+  POST/PUT/archive gated on `isAdmin` today, relaxed to `isLeagueAdmin`
+  when #36 lands (league curation is exactly the league-admin level of
+  trust, same call #61 makes). `leaderboard.ts` gains a Zod-validated
+  `?leagueId=` (the #32 `seasonId` template) filtering `league_id = @id` in
+  SQL; no param defaults to the default league. `nights.ts` accepts an
+  optional `leagueId` on POST/PUT (must exist and be unarchived), returns it
+  on GET, and maps the legacy `isLeagueNight` boolean to
+  default-league/null during the transition so no caller breaks mid-PR.
+- Default-league resolution (for *defaults only* now, not data meaning —
+  the data is always explicit after the backfill): the unarchived league
+  with the lowest id, i.e. the seeded Spilforsyningen Tirsdag. One shared
+  helper, used by the form preselection and the leaderboard/awards default.
+- Frontend: a new **`/leagues` management page** on the `/seasons` template
+  (prerendered route + `staticwebapp.config.json` rewrite, linked from
+  `NavMenu` for admins — and for league admins once #38's role-aware nav
+  exists): create, rename, archive. `NightForm.svelte`'s League/Casual
+  toggle **stays a two-button toggle** (user's decision): "League" means
+  *the active league from the nav selector* — a saved league night writes
+  that league's `leagueId`, and the button labels itself with the league's
+  name once more than one league exists ("Spilforsyningen Tirsdag" /
+  "Casual"). Logging into a different league = switch the nav selector
+  first; the form itself never grows a league picker. The `isTuesday(date)`
+  auto-default keeps toggling league-on for Tuesdays.
+- **Global league selector in the nav menu (user's decision):** a simple
+  dropdown pill inside `NavMenu.svelte`'s panel — its own "League" divider
+  section (the existing Admin/Theme section pattern) showing the active
+  league as a pill that expands to the list of unarchived leagues. Rendered
+  only when more than one league exists. The selection is app-wide state in
+  a tiny runes store (`src/lib/league.svelte.ts`, persisted to
+  `localStorage` exactly like `theme.svelte.ts`) defaulting to the default
+  league; every league-scoped view reads it — `/leaderboard`'s fetch passes
+  it as `?leagueId=`, and `NightForm`'s League button logs into it. One
+  selector, one context, instead of per-page pickers.
+- **The main page filters by the active league (user's decision):** the
+  nights list shows casual nights plus the active league's league nights —
+  other leagues' nights are *hidden*, not just badged. Apply the same
+  client-side filter (a `$derived` view in `+page.svelte`, composing with
+  the existing season filter) to everything that must agree with the
+  visible list: `Scoreboard.svelte` (whose league/overall filter now means
+  "the active league"), `DeckTable.svelte`, and `TrendChart`. The
+  deliberately-lifetime panels keep the #9 boundary and stay unfiltered:
+  Records, Badges, and the calendar heatmap read the full array.
+  `NightsList.svelte`'s per-night chip still names the league (it's needed
+  in admin scope and edit mode, and it's what tells you *why* a night is
+  showing).
+- Seasons stay global in this PR to keep it reviewable; #80 makes them
+  per-league (user's decision) together with the award surfaces.
+  `src/lib/seasonAwards.ts` and the recap/hall views scope to the default
+  league until then.
+
+**Effort:** M–L (the work is the backfill discipline plus auditing every
+`isLeagueNight` read — `leaderboard.ts`, `seasonAwards.ts`,
+`Scoreboard.svelte`, `NightsList.svelte`, `NightForm.svelte` — and deciding
+each one's league scoping consciously). **Pairs with:** 9 (same
+admin-managed-registry shape), 32 (the query-param template), 36/38 (the
+role that will co-own the `/leagues` page), 39 (events would gain the same
+nullable `leagueId` when section G lands), 55, 73.
+**Pitfalls.** The two migrations must land in one PR and run in order —
+the DDL migration first, the data migration second; test the pair against
+the Docker DB from a pre-migration snapshot, not just an already-migrated
+dev database. While both columns exist, drift between `isLeagueNight` and
+`leagueId` is the failure mode — a single write-path mapping, never
+parallel logic. Refuse archiving the default league (it anchors form
+defaults and the awards scope). Don't force the choice on quick logging —
+one league means the form looks exactly like today. Because the form binds
+"League" to the *active* league, **editing** an existing night must bind to
+the night's *own* `leagueId` instead — editing a Summer Cup night while
+Tuesday is selected in the nav must not silently re-link it (label the
+button with the night's league in edit mode, and only write a changed
+`leagueId` if the user explicitly toggled Casual↔League). Filtering the
+nights list by active league creates a "where did my night go?" moment the
+first time someone logs into the wrong league — a muted one-line hint under
+the list ("3 nights in other leagues") that switches the selector on tap is
+cheap insurance; hidden must never mean undiscoverable. Hall of fame / season
+awards claim "champion" titles — in this PR they stay
+Spilforsyningen-Tirsdag-only; #80 makes them league-scoped deliberately
+rather than by accident.
+
+### 80. Per-league seasons, awards, recap & hall of fame
+
+**What.** Seasons themselves become per-league, and every season-derived
+surface — the switcher, progress strip (#34), season awards panel (#31),
+recap (#33), and hall of fame (#33) — follows the nav-menu league selector
+(#79). With "Summer Cup 2026" active, the season switcher lists *that*
+league's seasons and `/leaderboard` shows *that* league's champions, best
+deck, and hall-of-fame cards — each league runs its own calendar and crowns
+its own honor roll instead of borrowing Tuesday's.
+
+**Why.** #79 deliberately leaves both pinned to Spilforsyningen Tirsdag so
+the leagues PR stays reviewable. But a competition without its own seasons
+and champions is half a league: a tournament series has its own start and
+end dates that make no sense as Tuesday-league seasons, and the awards cycle
+is the retention loop (#31's own argument) — it should fire per competition,
+not once globally.
+
+**How.**
+- Schema (user's decision — seasons are per-league): nullable `leagueId int`
+  FK on `seasons`, backfilled to Spilforsyningen Tirsdag with the same
+  custom-data-migration pattern #79 establishes — every existing season is
+  Tuesday-league history. Zod requires `leagueId` on season POST from then
+  on, so the column is effectively non-null after backfill.
+- API: `seasons.ts` returns each season's `leagueId` and scopes its
+  **no-overlap validation to within one league** — two leagues may
+  legitimately run overlapping date ranges, so the current global overlap
+  check would wrongly reject a valid second-league season.
+  `leaderboard.ts` validates that a passed `?seasonId=` actually belongs to
+  the requested league (mismatch → 404, the #32 unknown-id rule).
+- Frontend: `SeasonSwitcher` lists only the active league's seasons (plus
+  All time), and **resets its selection when the league selector changes**
+  — carrying a stale `seasonId` across leagues is the obvious bug. Add a
+  `seasonsForLeague` helper next to `nightInSeason` in `src/lib/pokemon.ts`
+  rather than pushing league awareness into the date math (`nightInSeason`
+  stays a pure date check). `/seasons` management gains a league picker on
+  its create/edit form (defaulting to the active league); `SeasonProgress`
+  (#34) reflects the active league's current season.
+- Awards/recap/hall thread the active league from `src/lib/league.svelte.ts`
+  through every leaderboard fetch on the page — including
+  `HallOfFame.svelte`'s per-ended-season calls, which now iterate the
+  active league's ended seasons only. `personalSeasonAwards`
+  (`src/lib/seasonAwards.ts`) switches its `isLeagueNight` filter to
+  "night is in the active league".
+- Label the context: awards/recap/hall headers name the league
+  ("Spilforsyningen Tirsdag · Spring 2026") so a screenshot is
+  self-explanatory — cheap insurance against cross-league confusion in the
+  group chat.
+
+**Effort:** M (given 79 — a small migration plus threading one parameter
+through season plumbing that's already reactive).
+**Depends on:** 79 (and 31–34, shipped).
+**Pitfalls.** The overlap-validation rescoping is the subtle change — it
+*loosens* a constraint, so get the `leagueId` condition into the check
+rather than deleting it. A night can now be in-season for one league and
+off-season for another on the same date; that's correct (#9's gap stance,
+per-league) — don't "fix" it. A season with zero nights for the active
+league must render nothing rather than an empty "champion: —" card (the #31
+ended-season gate handles most of this; verify the zero-night case
+specifically). Hall-of-fame calls stay one league's worth per view — keep
+the resolve-once-per-selection pattern, don't prefetch every league.
+Min-games floors (`BEST_NIGHT_MIN_GAMES` etc.) matter *more* in a small
+side league — keep them, never lower them per league.
+
+---
+
 ## Suggested first picks
 
 If you're an agent choosing without further user input, the best
@@ -2304,3 +2789,19 @@ Ideas requiring an explicit product decision from the user before implementing:
 > `outcome` codes. New ideas needing an explicit product decision first:
 > **#64/#66** (new anonymous token-gated endpoints, the #27 class of
 > exposure) and **#54** (posting league data to an external Discord).
+
+> **Update (July 2026, ideas 71–78):** section I adds ideas surveyed from
+> Training Court and Trainer Hill. Best picks among them: **#77** (win-rate
+> convention — S, pure consistency win), **#75** (match tags — S–M, high
+> fun-per-effort), and **#71** (battle-log import — M, the biggest
+> data-quality lever since #1 itself). **#72** should wait for #71 to prove
+> the parser; **#78** waits on #60; **#76** extends the `/api/leaderboard`
+> aggregate surface the way #31/#33 already did, so it needs no new product
+> decision.
+
+> **Update (July 2026, ideas 79–80):** **#79 (multiple leagues) is a direct
+> user request, which puts it ahead of the speculative ideas** — it's the
+> answer to "the Tuesday league and a big tournament shouldn't intermingle".
+> **#80** (per-league seasons, awards & hall of fame) is its user-requested
+> follow-up — build it immediately after #79, not bundled into it. If section G is ever
+> built, do #79 first or alongside #39 so events are born with a `leagueId`.

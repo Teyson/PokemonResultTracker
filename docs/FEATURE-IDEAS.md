@@ -1320,6 +1320,11 @@ existing per-match schema. The other spines in this section
 
 ### 39. League events — the shared night entity
 
+> **Status: implemented in PR #63**, per the correction below (leagueId added,
+> gated on plain `isAdmin` rather than idea 36's not-yet-built role). No
+> roster/matches yet — GET detail returns the event row only, pending
+> 40/43.
+
 **What.** An `events` table and CRUD: a league admin creates "Tuesday
 19 Aug", configures best-of-1 or best-of-3 and round length, and moves it
 through `setup → live → done`. Members see a new `/events` page listing

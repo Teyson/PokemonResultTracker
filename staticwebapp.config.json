@@ -7,6 +7,7 @@
     { "route": "/logout", "redirect": "/.auth/logout" },
     { "route": "/admin", "rewrite": "/admin.html" },
     { "route": "/decks", "rewrite": "/decks.html" },
+    { "route": "/events", "rewrite": "/events.html" },
     { "route": "/leaderboard", "rewrite": "/leaderboard.html" },
     { "route": "/leagues", "rewrite": "/leagues.html" },
     { "route": "/profile", "rewrite": "/profile.html" },

@@ -156,6 +156,33 @@ export const leagues = mssqlTable('leagues', {
 });
 
 /**
+ * A league night as a shared event, not just each attendee's individual
+ * `nights` row — the entity pairings/check-in/live-reporting (idea 82) hang
+ * off. Admin-managed from /events, moving through setup -> live -> done.
+ * name is nullable — the UI derives "League night <playedOn>" when absent.
+ * No FK from nights to here (yet): same no-FK-derive-at-read-time stance as
+ * seasons, kept deliberately separate until a bridge (idea 50) links them.
+ */
+export const events = mssqlTable('events', {
+  id: int().primaryKey().identity(),
+  name: nvarchar({ length: 100 }),
+  playedOn: date('played_on', { mode: 'string' }).notNull(),
+  bestOf: int('best_of').notNull().default(1),
+  roundLengthMin: int('round_length_min').notNull().default(30),
+  // 'setup' | 'live' | 'done'
+  status: nvarchar({ length: 10 }).notNull().default('setup'),
+  leagueId: int('league_id')
+    .notNull()
+    .references(() => leagues.id),
+  createdBy: int('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
  * Trail of admin/mutating actions worth being able to answer "who did that,
  * and when" about — member add/remove, an admin editing/deleting someone
  * else's night, deck merge/rename. actorLogin is a denormalized copy of the

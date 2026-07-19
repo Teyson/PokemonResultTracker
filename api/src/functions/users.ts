@@ -1,9 +1,8 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { eq, sql, asc } from 'drizzle-orm';
-import { getDb } from '../db/client';
 import { allowedUsers, users } from '../db/schema';
 import { logAudit } from '../db/auditLog';
-import { getUser, resolveRole } from '../auth';
+import { authenticate, type Db } from '../auth';
 import { withDollarSuffix } from '../db/displayName';
 import type { UsersResponse } from '../types';
 
@@ -26,8 +25,6 @@ const LOGIN_PATTERN = /^[A-Za-z0-9-]{1,39}$/;
 function toDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
-
-type Db = Awaited<ReturnType<typeof getDb>>;
 
 /** Whether any *other* user's alias/login, or any *other* pending invite's login, already matches this candidate — used to find a free `$`-suffixed alias below. */
 async function candidateInUse(db: Db, excludeUsersId: number, candidate: string): Promise<boolean> {
@@ -67,11 +64,9 @@ app.http('users', {
     const idParam = request.params.id;
     const admin = (process.env.ADMIN_GITHUB_LOGIN ?? '').trim();
     try {
-      const caller = getUser(request);
-      if (!caller) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isAdmin } = await resolveRole(db, caller.userId, caller.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { user: caller, db, isAdmin } = auth;
       if (!isAdmin) return { status: 403, jsonBody: { error: 'Admins only.' } };
 
       if (request.method === 'GET') {

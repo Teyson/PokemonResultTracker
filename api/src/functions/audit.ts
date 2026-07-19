@@ -1,9 +1,8 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { desc, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb } from '../db/client';
 import { auditLog } from '../db/schema';
-import { getUser, resolveRole } from '../auth';
+import { authenticate } from '../auth';
 import type { AuditLogResponse } from '../types';
 
 /**
@@ -31,11 +30,9 @@ app.http('audit', {
   route: 'audit',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      const user = getUser(request);
-      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isAdmin } = await resolveRole(db, user.userId, user.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { db, isAdmin } = auth;
       if (!isAdmin) return { status: 403, jsonBody: { error: 'Admins only.' } };
 
       const params = new URL(request.url).searchParams;

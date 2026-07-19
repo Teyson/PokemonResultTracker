@@ -1,9 +1,8 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { and, eq, gte, lte, isNull, count, sum } from 'drizzle-orm';
-import { getDb } from '../db/client';
 import { nights, seasons, users, decks } from '../db/schema';
 import { defaultLeagueId } from '../db/leagues';
-import { getUser, resolveRole } from '../auth';
+import { authenticate } from '../auth';
 import { displayName } from '../db/displayName';
 import type { LeaderboardEntryResponse, LeaderboardResponse, BestDeckResponse } from '../types';
 
@@ -42,11 +41,9 @@ app.http('leaderboard', {
   route: 'leaderboard',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      const user = getUser(request);
-      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { db, isMember } = auth;
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       const leagueIdParam = request.query.get('leagueId');

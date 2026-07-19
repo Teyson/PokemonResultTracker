@@ -5,7 +5,7 @@ import { getDb } from '../db/client';
 import { decks, matches, nights, users } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
 import { logAudit } from '../db/auditLog';
-import { getUser, resolveRole } from '../auth';
+import { authenticate } from '../auth';
 import { displayName } from '../db/displayName';
 import type { DeckSummaryResponse } from '../types';
 
@@ -64,11 +64,9 @@ app.http('decks', {
       if (actionParam && !(request.method === 'POST' && actionParam === 'merge')) {
         return { status: 400, jsonBody: { error: 'Unknown action.' } };
       }
-      const user = getUser(request);
-      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { user, db, isAdmin, isMember } = auth;
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       if (request.method === 'GET') {

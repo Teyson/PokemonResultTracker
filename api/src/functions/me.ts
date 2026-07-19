@@ -1,10 +1,9 @@
 import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } from '@azure/functions';
 import { z } from 'zod';
 import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
-import { getDb } from '../db/client';
 import { users, allowedUsers } from '../db/schema';
 import { ensureUser } from '../db/userDirectory';
-import { getUser, resolveRole } from '../auth';
+import { authenticate, type Db } from '../auth';
 import { MAX_ALIAS_LENGTH } from '../db/displayName';
 
 /**
@@ -36,8 +35,6 @@ const aliasInputSchema = z.object({
     z.string().max(MAX_ALIAS_LENGTH, `Alias must be ${MAX_ALIAS_LENGTH} characters or fewer.`).nullable()
   )
 });
-
-type Db = Awaited<ReturnType<typeof getDb>>;
 
 /**
  * Case-insensitive collision check against every other user's current alias
@@ -86,11 +83,9 @@ app.http('me', {
   authLevel: 'anonymous',
   route: 'me',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-    const user = getUser(request);
-    if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-    const db = await getDb();
-    const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+    const auth = await authenticate(request, context);
+    if (!('isMember' in auth)) return auth;
+    const { user, db, isAdmin, isMember } = auth;
 
     if (request.method === 'GET') {
       let alias: string | null = null;

@@ -9,7 +9,7 @@ import { resolveNightLeagueId } from '../db/leagues';
 import { ensureUser } from '../db/userDirectory';
 import { displayName } from '../db/displayName';
 import { logAudit } from '../db/auditLog';
-import { getUser, resolveRole } from '../auth';
+import { authenticate } from '../auth';
 import type { MatchResponse, NightResponse } from '../types';
 
 /**
@@ -289,11 +289,9 @@ app.http('nights', {
       if (actionParam && !(request.method === 'POST' && actionParam === 'restore')) {
         return { status: 400, jsonBody: { error: 'Unknown action.' } };
       }
-      const user = getUser(request);
-      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { user, db, isAdmin, isMember } = auth;
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       if (request.method === 'GET') {

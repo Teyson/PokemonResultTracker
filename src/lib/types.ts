@@ -86,6 +86,8 @@ export interface Season {
   name: string;
   startsOn: string;
   endsOn: string | null;
+  // The league this season belongs to — each league runs its own calendar (#80).
+  leagueId: string;
 }
 
 /** A named competitive context, e.g. "Tuesday League". archivedAt null means active (visible in pickers). */

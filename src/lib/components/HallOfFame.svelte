@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { Season, LeaderboardEntry } from '$lib/types';
 
-  let { entries }: { entries: { season: Season; champion: LeaderboardEntry | null }[] } = $props();
+  let { entries, leagueName }: { entries: { season: Season; champion: LeaderboardEntry | null }[]; leagueName: string } =
+    $props();
 </script>
 
 {#if entries.length > 0}
-  <div class="section-title">Hall of fame</div>
+  <div class="section-title">Hall of fame{leagueName ? ` · ${leagueName}` : ''}</div>
   <div class="hof-scroll">
     <div class="hof">
       {#each entries as e (e.season.id)}

@@ -9,12 +9,22 @@
     entries,
     bestDeck,
     nights,
-    myLogin
-  }: { season: Season; entries: LeaderboardEntry[]; bestDeck: BestDeck | null; nights: Night[]; myLogin: string } = $props();
+    myLogin,
+    leagueId,
+    leagueName
+  }: {
+    season: Season;
+    entries: LeaderboardEntry[];
+    bestDeck: BestDeck | null;
+    nights: Night[];
+    myLogin: string;
+    leagueId: string;
+    leagueName: string;
+  } = $props();
 
   let open = $state(true);
 
-  let awards = $derived(personalSeasonAwards(nights, season));
+  let awards = $derived(personalSeasonAwards(nights, season, leagueId));
   let champion = $derived(entries[0] ?? null);
   let isChampion = $derived(champion !== null && champion.login === myLogin);
   let myRank = $derived(entries.findIndex((e) => e.login === myLogin) + 1);
@@ -33,7 +43,7 @@
 </script>
 
 <div class="section-title toggle" role="button" tabindex="0" onclick={() => (open = !open)} onkeydown={(e) => e.key === 'Enter' && (open = !open)}>
-  Season awards
+  Season awards{leagueName ? ` · ${leagueName}` : ''}
   <span class="chev">{open ? '▴' : '▾'}</span>
 </div>
 {#if open}

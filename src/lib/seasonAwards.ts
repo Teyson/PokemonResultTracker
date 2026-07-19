@@ -28,12 +28,12 @@ const MIN_GAMES = 3;
 
 /**
  * A member's own per-season awards: nights/games played, best-performing deck,
- * and single best night. Scoped to league nights only, matching the leaderboard's
- * own scoping (casual nights don't count toward standings, so they don't count
- * here either).
+ * and single best night. Scoped to the active league's nights only, matching
+ * the leaderboard's own scoping (casual nights, and other leagues' nights,
+ * don't count toward standings, so they don't count here either).
  */
-export function personalSeasonAwards(nights: Night[], season: Season): PersonalSeasonAwards {
-  const seasonNights = nights.filter((n) => n.isLeagueNight && nightInSeason(n, season));
+export function personalSeasonAwards(nights: Night[], season: Season, leagueId: string): PersonalSeasonAwards {
+  const seasonNights = nights.filter((n) => n.leagueId === leagueId && nightInSeason(n, season));
 
   const byDeck = new Map<string, { deck: string; type: string; w: number; t: number; l: number }>();
   for (const n of seasonNights) {

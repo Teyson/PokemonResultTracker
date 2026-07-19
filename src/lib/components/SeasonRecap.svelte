@@ -3,7 +3,7 @@
   import { ppg, games } from '$lib/pokemon';
   import { slide } from 'svelte/transition';
 
-  let { season, entries }: { season: Season; entries: LeaderboardEntry[] } = $props();
+  let { season, entries, leagueName }: { season: Season; entries: LeaderboardEntry[]; leagueName: string } = $props();
 
   const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -16,7 +16,7 @@
 </script>
 
 <div class="section-title toggle" role="button" tabindex="0" onclick={() => (open = !open)} onkeydown={(e) => e.key === 'Enter' && (open = !open)}>
-  Season recap · {season.name}
+  Season recap{leagueName ? ` · ${leagueName}` : ''} · {season.name}
   <span class="chev">{open ? '▴' : '▾'}</span>
 </div>
 {#if open}

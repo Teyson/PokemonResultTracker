@@ -122,13 +122,17 @@ export const matches = mssqlTable('matches', {
  * /seasons. Deliberately has no FK on nights — a night's season is derived at
  * read time by comparing playedOn against [startsOn, endsOn], so adding or
  * editing a season never requires backfilling existing nights. endsOn null
- * means open-ended (the current season).
+ * means open-ended (the current season). Seasons are per-league (leagueId) —
+ * each league runs its own calendar, so overlap validation is scoped within
+ * one league rather than globally. Nullable only to allow the backfill
+ * migration to run before Zod starts requiring it on every new season.
  */
 export const seasons = mssqlTable('seasons', {
   id: int().primaryKey().identity(),
   name: nvarchar({ length: 100 }).notNull(),
   startsOn: date('starts_on', { mode: 'string' }).notNull(),
   endsOn: date('ends_on', { mode: 'string' }),
+  leagueId: int('league_id').references(() => leagues.id),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

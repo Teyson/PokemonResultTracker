@@ -3,7 +3,8 @@
   import type { AuthContext, Season } from '$lib/types';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { fmtDate } from '$lib/pokemon';
+  import { fmtDate, seasonsForLeague } from '$lib/pokemon';
+  import { leagueState, loadLeagues } from '$lib/league.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
 
@@ -13,19 +14,33 @@
   let seasonsList = $state<Season[]>([]);
   let loaded = $state(false);
 
+  let unarchivedLeagues = $derived(leagueState.leagues.filter((l) => !l.archivedAt));
+  let activeLeague = $derived(unarchivedLeagues.find((l) => l.id === leagueState.activeLeagueId) ?? unarchivedLeagues[0] ?? null);
+
   let newName = $state('');
   let newStart = $state('');
   let newEnd = $state('');
+  let newLeagueId = $state<string>('');
   let adding = $state(false);
 
   let editingId = $state<string | null>(null);
   let editName = $state('');
   let editStart = $state('');
   let editEnd = $state('');
+  let editLeagueId = $state<string>('');
   let saving = $state(false);
 
   $effect(() => {
     if (isAdmin && !loaded) reload();
+    if (isAdmin) loadLeagues();
+  });
+
+  // Keep the add form's league defaulted to whichever league is currently
+  // active in the nav, but only until the admin has touched the field —
+  // re-defaulting on every league switch would clobber a deliberate pick.
+  let newLeagueTouched = $state(false);
+  $effect(() => {
+    if (!newLeagueTouched && activeLeague) newLeagueId = activeLeague.id;
   });
 
   async function reload() {
@@ -39,12 +54,12 @@
 
   async function addSeason() {
     const name = newName.trim();
-    if (!name || !newStart) return;
+    if (!name || !newStart || !newLeagueId) return;
     adding = true;
     try {
       await api('/api/seasons', {
         method: 'POST',
-        body: JSON.stringify({ name, startsOn: newStart, endsOn: newEnd || null })
+        body: JSON.stringify({ name, startsOn: newStart, endsOn: newEnd || null, leagueId: Number(newLeagueId) })
       });
       newName = '';
       newStart = '';
@@ -63,6 +78,7 @@
     editName = s.name;
     editStart = s.startsOn;
     editEnd = s.endsOn ?? '';
+    editLeagueId = s.leagueId;
   }
 
   function cancelEdit() {
@@ -71,12 +87,12 @@
 
   async function saveEdit(s: Season) {
     const name = editName.trim();
-    if (!name || !editStart) return;
+    if (!name || !editStart || !editLeagueId) return;
     saving = true;
     try {
       await api(`/api/seasons/${encodeURIComponent(s.id)}`, {
         method: 'PUT',
-        body: JSON.stringify({ name, startsOn: editStart, endsOn: editEnd || null })
+        body: JSON.stringify({ name, startsOn: editStart, endsOn: editEnd || null, leagueId: Number(editLeagueId) })
       });
       editingId = null;
       await reload();
@@ -101,7 +117,8 @@
     }
   }
 
-  let sortedSeasons = $derived([...seasonsList].sort((a, b) => (a.startsOn < b.startsOn ? 1 : a.startsOn > b.startsOn ? -1 : 0)));
+  let leagueSeasons = $derived(activeLeague ? seasonsForLeague(seasonsList, activeLeague.id) : []);
+  let sortedSeasons = $derived([...leagueSeasons].sort((a, b) => (a.startsOn < b.startsOn ? 1 : a.startsOn > b.startsOn ? -1 : 0)));
 </script>
 
 <svelte:head>
@@ -118,10 +135,11 @@
   {:else}
     <div class="wrap">
       <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
-      <h2>Seasons</h2>
+      <h2>Seasons{activeLeague ? ` · ${activeLeague.name}` : ''}</h2>
       <div class="sub">
         Partition play into named seasons so the scoreboard and deck stats can default to "right now" instead of an
-        ever-growing all-time average. Leave the end date blank for the current, still-running season.
+        ever-growing all-time average. Leave the end date blank for the current, still-running season. Each season
+        belongs to one league — switch leagues from the nav menu to manage another league's seasons.
       </div>
 
       <div class="card">
@@ -129,9 +147,20 @@
           <input type="text" placeholder="Season name, e.g. Spring 2026" autocomplete="off" bind:value={newName} />
           <input type="date" aria-label="Start date" bind:value={newStart} />
           <input type="date" aria-label="End date (optional)" bind:value={newEnd} />
-          <button disabled={adding || !newName.trim() || !newStart} onclick={addSeason}>Add</button>
+          {#if unarchivedLeagues.length > 1}
+            <select
+              aria-label="League"
+              bind:value={newLeagueId}
+              onchange={() => (newLeagueTouched = true)}
+            >
+              {#each unarchivedLeagues as l (l.id)}
+                <option value={l.id}>{l.name}</option>
+              {/each}
+            </select>
+          {/if}
+          <button disabled={adding || !newName.trim() || !newStart || !newLeagueId} onclick={addSeason}>Add</button>
         </div>
-        <div class="hint">Date ranges can't overlap an existing season.</div>
+        <div class="hint">Date ranges can't overlap an existing season in the same league.</div>
       </div>
 
       {#if !loaded}
@@ -170,12 +199,19 @@
                     <input type="date" aria-label="Start date" bind:value={editStart} />
                     <input type="date" aria-label="End date (optional)" bind:value={editEnd} />
                   </div>
+                  {#if unarchivedLeagues.length > 1}
+                    <select aria-label="League" bind:value={editLeagueId}>
+                      {#each unarchivedLeagues as l (l.id)}
+                        <option value={l.id}>{l.name}</option>
+                      {/each}
+                    </select>
+                  {/if}
                   <div class="panel-actions">
                     <button type="button" class="ghost" onclick={cancelEdit}>Cancel</button>
                     <button
                       type="button"
                       class="primary"
-                      disabled={saving || !editName.trim() || !editStart}
+                      disabled={saving || !editName.trim() || !editStart || !editLeagueId}
                       onclick={() => saveEdit(s)}>Save</button
                     >
                   </div>
@@ -229,7 +265,12 @@
     flex: 1 1 130px;
     min-width: 0;
   }
-  .add input {
+  .add select {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+  .add input,
+  .add select {
     background: var(--ink);
     border: 1px solid var(--line);
     color: var(--text);
@@ -351,7 +392,8 @@
     border-bottom: 1px solid var(--line);
     background: rgba(0, 0, 0, 0.18);
   }
-  .panel input {
+  .panel input,
+  .panel select {
     width: 100%;
     box-sizing: border-box;
     background: var(--ink);
@@ -362,7 +404,11 @@
     font-size: 13.5px;
     font-family: inherit;
   }
-  .panel input:focus {
+  .panel select {
+    margin-top: 9px;
+  }
+  .panel input:focus,
+  .panel select:focus {
     outline: none;
     border-color: var(--red);
     box-shadow: 0 0 0 3px rgba(239, 47, 66, 0.16);

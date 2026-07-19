@@ -2,17 +2,19 @@ import { app, type HttpRequest, type InvocationContext, type HttpResponseInit } 
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client';
-import { seasons } from '../db/schema';
+import { seasons, leagues } from '../db/schema';
 import { logAudit } from '../db/auditLog';
 import { getUser, resolveRole } from '../auth';
 import type { SeasonResponse } from '../types';
 
 /**
  * /api/seasons — named partitions of play (e.g. "Spring 2026"), managed from
- * the /seasons admin page.
+ * the /seasons admin page. Each season belongs to one league (#80) — every
+ * league runs its own calendar, so overlap validation is scoped within a
+ * single league; two leagues may legitimately run overlapping seasons.
  *
- *   GET    /api/seasons        -> SeasonResponse[] (member; ordered by startsOn desc)
- *   POST   /api/seasons        -> admin: create (body: { name, startsOn, endsOn? })
+ *   GET    /api/seasons        -> SeasonResponse[] (member; ordered by startsOn desc; all leagues — the client filters by active league)
+ *   POST   /api/seasons        -> admin: create (body: { name, startsOn, endsOn?, leagueId })
  *   PUT    /api/seasons/{id}   -> admin: edit the same shape
  *   DELETE /api/seasons/{id}   -> admin: delete
  *
@@ -32,7 +34,8 @@ const seasonSchema = z
   .object({
     name: z.string().trim().min(1, 'A season name is required.').max(100, 'Season name is too long.'),
     startsOn: dateSchema,
-    endsOn: dateSchema.optional().nullable()
+    endsOn: dateSchema.optional().nullable(),
+    leagueId: z.number().int()
   })
   .refine((v) => !v.endsOn || v.endsOn >= v.startsOn, {
     message: 'End date must be on or after the start date.',
@@ -41,13 +44,22 @@ const seasonSchema = z
 
 type Db = Awaited<ReturnType<typeof getDb>>;
 
-function toResponse(r: { id: number; name: string; startsOn: string; endsOn: string | null }): SeasonResponse {
-  return { id: String(r.id), name: r.name, startsOn: r.startsOn, endsOn: r.endsOn };
+function toResponse(r: { id: number; name: string; startsOn: string; endsOn: string | null; leagueId: number | null }): SeasonResponse {
+  return { id: String(r.id), name: r.name, startsOn: r.startsOn, endsOn: r.endsOn, leagueId: String(r.leagueId) };
 }
 
-/** Lexicographic range-overlap check (ISO date strings), excluding a given id on edit. */
-async function hasOverlap(db: Db, startsOn: string, endsOn: string | null | undefined, excludeId?: number): Promise<boolean> {
-  const rows = await db.select({ id: seasons.id, startsOn: seasons.startsOn, endsOn: seasons.endsOn }).from(seasons);
+/** Lexicographic range-overlap check (ISO date strings) within one league, excluding a given id on edit. */
+async function hasOverlap(
+  db: Db,
+  leagueId: number,
+  startsOn: string,
+  endsOn: string | null | undefined,
+  excludeId?: number
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: seasons.id, startsOn: seasons.startsOn, endsOn: seasons.endsOn })
+    .from(seasons)
+    .where(eq(seasons.leagueId, leagueId));
   const aEnd = endsOn ?? OPEN_ENDED_SENTINEL;
   return rows.some((r) => {
     if (excludeId !== undefined && r.id === excludeId) return false;
@@ -72,7 +84,7 @@ app.http('seasons', {
 
       if (request.method === 'GET') {
         const rows = await db
-          .select({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn })
+          .select({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn, leagueId: seasons.leagueId })
           .from(seasons)
           .orderBy(desc(seasons.startsOn));
         return { jsonBody: rows.map(toResponse) };
@@ -92,14 +104,16 @@ app.http('seasons', {
         if (!parsed.success) {
           return { status: 400, jsonBody: { error: parsed.error.issues[0]?.message ?? 'Invalid request body.' } };
         }
-        const { name, startsOn, endsOn } = parsed.data;
-        if (await hasOverlap(db, startsOn, endsOn)) {
-          return { status: 409, jsonBody: { error: 'That date range overlaps an existing season.' } };
+        const { name, startsOn, endsOn, leagueId } = parsed.data;
+        const league = (await db.select({ id: leagues.id }).from(leagues).where(eq(leagues.id, leagueId)))[0];
+        if (!league) return { status: 400, jsonBody: { error: 'League not found.' } };
+        if (await hasOverlap(db, leagueId, startsOn, endsOn)) {
+          return { status: 409, jsonBody: { error: 'That date range overlaps an existing season in this league.' } };
         }
         const inserted = await db
           .insert(seasons)
-          .output({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn })
-          .values({ name, startsOn, endsOn: endsOn ?? null });
+          .output({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn, leagueId: seasons.leagueId })
+          .values({ name, startsOn, endsOn: endsOn ?? null, leagueId });
         await logAudit(db, user, 'season.create', `Created "${name}"`, context);
         return { status: 201, jsonBody: toResponse(inserted[0]) };
       }
@@ -121,14 +135,16 @@ app.http('seasons', {
         if (!parsed.success) {
           return { status: 400, jsonBody: { error: parsed.error.issues[0]?.message ?? 'Invalid request body.' } };
         }
-        const { name, startsOn, endsOn } = parsed.data;
-        if (await hasOverlap(db, startsOn, endsOn, id)) {
-          return { status: 409, jsonBody: { error: 'That date range overlaps an existing season.' } };
+        const { name, startsOn, endsOn, leagueId } = parsed.data;
+        const league = (await db.select({ id: leagues.id }).from(leagues).where(eq(leagues.id, leagueId)))[0];
+        if (!league) return { status: 400, jsonBody: { error: 'League not found.' } };
+        if (await hasOverlap(db, leagueId, startsOn, endsOn, id)) {
+          return { status: 409, jsonBody: { error: 'That date range overlaps an existing season in this league.' } };
         }
-        await db.update(seasons).set({ name, startsOn, endsOn: endsOn ?? null }).where(eq(seasons.id, id));
+        await db.update(seasons).set({ name, startsOn, endsOn: endsOn ?? null, leagueId }).where(eq(seasons.id, id));
         await logAudit(db, user, 'season.update', `Updated "${existing.name}"${existing.name !== name ? ` to "${name}"` : ''}`, context);
         const rows = await db
-          .select({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn })
+          .select({ id: seasons.id, name: seasons.name, startsOn: seasons.startsOn, endsOn: seasons.endsOn, leagueId: seasons.leagueId })
           .from(seasons)
           .where(eq(seasons.id, id));
         return { jsonBody: toResponse(rows[0]) };

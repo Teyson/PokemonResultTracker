@@ -152,6 +152,11 @@ export function nightInSeason(n: Pick<Night, 'date'>, season: Season): boolean {
   return n.date >= season.startsOn && (!season.endsOn || n.date <= season.endsOn);
 }
 
+/** Seasons belonging to one league — every season-derived view (switcher, awards, hall of fame) scopes through this rather than re-filtering by leagueId itself. */
+export function seasonsForLeague(seasonsList: Season[], leagueId: string): Season[] {
+  return seasonsList.filter((s) => s.leagueId === leagueId);
+}
+
 /**
  * The id of the season whose range contains today, or null if none does (an
  * off-season gap, or no seasons defined yet). Deliberately does not fall back

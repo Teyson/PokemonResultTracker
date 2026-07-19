@@ -4,7 +4,18 @@
   import { avatarUrl } from '$lib/auth';
   import { api } from '$lib/api';
   import { toast } from '$lib/toast.svelte';
-  import { pts, games, ppg, scorePct, currentSeasonId, startedSeasons, todayISO, rankLeaderboard } from '$lib/pokemon';
+  import {
+    pts,
+    games,
+    ppg,
+    scorePct,
+    currentSeasonId,
+    startedSeasons,
+    seasonsForLeague,
+    todayISO,
+    rankLeaderboard
+  } from '$lib/pokemon';
+  import { leagueState, loadLeagues } from '$lib/league.svelte';
   import PokeBall from '$lib/components/PokeBall.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Masthead from '$lib/components/Masthead.svelte';
@@ -21,13 +32,6 @@
   let entries = $state<LeaderboardEntry[]>([]);
   let bestDeck = $state<BestDeck | null>(null);
   let loaded = $state(false);
-  // Separate from `loaded` on purpose: reload() flips `loaded` back to false
-  // on every call (so mid-switch UI shows a loading state instead of stale
-  // data), and an $effect re-runs whenever anything it reads changes — so
-  // guarding the one-time initial fetch on `!loaded` would re-fire it on
-  // every later season switch too, racing an all-time reload against
-  // whichever season the user actually picked.
-  let initialLoadStarted = $state(false);
 
   let seasonsList = $state<Season[]>([]);
   let seasonsLoaded = $state(false);
@@ -51,8 +55,29 @@
   let tableOpen = $state(true);
 
   $effect(() => {
-    if (isMember && !initialLoadStarted) {
-      initialLoadStarted = true;
+    if (isMember) loadLeagues();
+  });
+
+  let activeLeagueId = $derived(leagueState.activeLeagueId);
+  let activeLeague = $derived(leagueState.leagues.find((l) => l.id === activeLeagueId) ?? null);
+
+  // Every season-derived view on this page (switcher, progress, awards,
+  // recap, hall of fame) is scoped to the nav-menu league selection — the API
+  // returns every league's seasons, so this is the one place that filters.
+  let leagueSeasons = $derived(activeLeagueId ? seasonsForLeague(seasonsList, activeLeagueId) : []);
+
+  // Tracks the previously-active league so a switch can reset the season
+  // selection and re-fetch, without re-firing on every unrelated re-render.
+  let lastLeagueId = $state<string | null>(null);
+  $effect(() => {
+    if (isMember && activeLeagueId && activeLeagueId !== lastLeagueId) {
+      lastLeagueId = activeLeagueId;
+      // Carrying a stale seasonId across leagues would silently 404 the next
+      // fetch (seasons are per-league) — reset to 'all' and let the
+      // current-season effect below re-pick for the new league.
+      selectedSeasonId = 'all';
+      seasonDefaulted = false;
+      hallOfFameLoaded = false;
       reload('all');
     }
     if (isMember && !seasonsLoaded) loadSeasons();
@@ -60,17 +85,18 @@
   });
 
   $effect(() => {
-    if (seasonsLoaded && !hallOfFameLoaded) loadHallOfFame();
+    if (seasonsLoaded && activeLeagueId && !hallOfFameLoaded) loadHallOfFame();
   });
 
-  // Auto-select the current season only once, the first time seasons finish
-  // loading, mirroring the main page's switcher default — then re-fetch the
-  // leaderboard scoped to it (the 'all' load above already covered the
-  // no-current-season case, so this only reloads when a season is found).
+  // Auto-select the current season only once per league, the first time
+  // seasons finish loading, mirroring the main page's switcher default — then
+  // re-fetch the leaderboard scoped to it (the 'all' load above already
+  // covered the no-current-season case, so this only reloads when a season is
+  // found).
   $effect(() => {
-    if (seasonsLoaded && !seasonDefaulted) {
+    if (seasonsLoaded && activeLeagueId && !seasonDefaulted) {
       seasonDefaulted = true;
-      const id = currentSeasonId(seasonsList, todayISO());
+      const id = currentSeasonId(leagueSeasons, todayISO());
       if (id) {
         selectedSeasonId = id;
         reload(id);
@@ -81,7 +107,7 @@
   let selectedSeason = $derived(seasonsList.find((s) => s.id === selectedSeasonId) ?? null);
   // The switcher only offers seasons that have started — a not-yet-started
   // season has no standings to show and would just be confusing to pick.
-  let switcherSeasons = $derived(startedSeasons(seasonsList, todayISO()));
+  let switcherSeasons = $derived(startedSeasons(leagueSeasons, todayISO()));
 
   async function loadSeasons() {
     try {
@@ -103,15 +129,24 @@
 
   // Failures here are per-season and non-fatal — a past season's standings
   // being briefly unreachable shouldn't block the whole page or retry forever.
+  // Stays one league's worth per call — resolved fresh on every league switch
+  // (via hallOfFameLoaded reset) rather than prefetching every league's history.
   async function loadHallOfFame() {
     hallOfFameLoaded = true;
+    if (!activeLeagueId) return;
+    const leagueId = activeLeagueId;
     const today = todayISO();
-    const ended = seasonsList.filter((s) => s.endsOn && s.endsOn < today);
-    if (ended.length === 0) return;
+    const ended = leagueSeasons.filter((s) => s.endsOn && s.endsOn < today);
+    if (ended.length === 0) {
+      hallOfFame = [];
+      return;
+    }
     try {
       hallOfFame = await Promise.all(
         ended.map(async (season) => {
-          const res = await api<Leaderboard>(`/api/leaderboard?seasonId=${encodeURIComponent(season.id)}`);
+          const res = await api<Leaderboard>(
+            `/api/leaderboard?seasonId=${encodeURIComponent(season.id)}&leagueId=${encodeURIComponent(leagueId)}`
+          );
           return { season, champion: rankLeaderboard(res?.entries ?? [])[0] ?? null };
         })
       );
@@ -136,14 +171,16 @@
   // so callers control exactly which scope a given fetch requests, since
   // this runs both from effects and direct user picks.
   async function reload(seasonId: string | 'all') {
+    if (!activeLeagueId) return;
     const token = ++reloadToken;
     // Reset before the fetch, not after — otherwise the previous scope's
     // entries (and loaded=true) linger during the round-trip and briefly
     // render under the newly-selected season's heading.
     loaded = false;
     try {
-      const query = seasonId !== 'all' ? `?seasonId=${encodeURIComponent(seasonId)}` : '';
-      const res = await api<Leaderboard>(`/api/leaderboard${query}`);
+      const params = new URLSearchParams({ leagueId: activeLeagueId });
+      if (seasonId !== 'all') params.set('seasonId', seasonId);
+      const res = await api<Leaderboard>(`/api/leaderboard?${params}`);
       if (token !== reloadToken) return; // superseded by a later pick — discard
       entries = res?.entries ?? [];
       bestDeck = res?.bestDeck ?? null;
@@ -198,26 +235,34 @@
   {:else}
     <div class="wrap">
       <Masthead {isAdmin} principal={auth.principal} alias={auth.alias} />
-      <h2>League leaderboard</h2>
+      <h2>League leaderboard{activeLeague ? ` · ${activeLeague.name}` : ''}</h2>
       <div class="sub">
         Standings for league nights only — casual nights don't count here. Ranked by points, ties broken by fewer
         games played.
       </div>
 
-      {#if seasonsList.length > 0}
+      {#if leagueSeasons.length > 0}
         <div class="season-bar">
           <SeasonSwitcher seasons={switcherSeasons} {selectedSeasonId} onSelect={pickSeason} />
         </div>
-        <SeasonProgress seasons={seasonsList} {selectedSeason} />
+        <SeasonProgress seasons={leagueSeasons} {selectedSeason} />
       {/if}
 
       {#if selectedSeasonId === 'all'}
-        <HallOfFame entries={hallOfFame} />
+        <HallOfFame entries={hallOfFame} leagueName={activeLeague?.name ?? ''} />
       {/if}
 
-      {#if selectedSeason && isEndedSeason && loaded && myNightsLoaded}
-        <SeasonAwards season={selectedSeason} entries={ranked} {bestDeck} nights={myNights} myLogin={auth.principal.userDetails} />
-        <SeasonRecap season={selectedSeason} entries={ranked} />
+      {#if selectedSeason && isEndedSeason && loaded && myNightsLoaded && activeLeagueId}
+        <SeasonAwards
+          season={selectedSeason}
+          entries={ranked}
+          {bestDeck}
+          nights={myNights}
+          myLogin={auth.principal.userDetails}
+          leagueId={activeLeagueId}
+          leagueName={activeLeague?.name ?? ''}
+        />
+        <SeasonRecap season={selectedSeason} entries={ranked} leagueName={activeLeague?.name ?? ''} />
       {/if}
 
       {#if selectedSeasonId !== 'all'}

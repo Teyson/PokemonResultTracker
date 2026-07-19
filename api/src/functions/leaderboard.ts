@@ -28,6 +28,9 @@ import type { LeaderboardEntryResponse, LeaderboardResponse, BestDeckResponse } 
  * The seasonId/leagueId filters are applied server-side (before aggregating)
  * rather than client-side, so the privacy boundary — members only ever see
  * aggregate totals, never raw nights — holds for season and league views too.
+ * seasonId is validated to actually belong to leagueId (or the default league
+ * when leagueId is omitted) — a season from a different league is 404, same
+ * as an unknown id (#80: seasons are per-league).
  */
 
 // A deck needs more than this many nights logged to be eligible for the
@@ -46,18 +49,6 @@ app.http('leaderboard', {
       const { isMember } = await resolveRole(db, user.userId, user.userDetails, context);
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
-      const seasonIdParam = request.query.get('seasonId');
-      let seasonRange: { startsOn: string; endsOn: string | null } | undefined;
-      if (seasonIdParam !== null) {
-        const seasonId = Number(seasonIdParam);
-        if (!Number.isInteger(seasonId)) return { status: 400, jsonBody: { error: 'Invalid seasonId.' } };
-        const found = (
-          await db.select({ startsOn: seasons.startsOn, endsOn: seasons.endsOn }).from(seasons).where(eq(seasons.id, seasonId))
-        )[0];
-        if (!found) return { status: 404, jsonBody: { error: 'Season not found.' } };
-        seasonRange = found;
-      }
-
       const leagueIdParam = request.query.get('leagueId');
       let leagueId: number | null;
       if (leagueIdParam !== null) {
@@ -69,6 +60,23 @@ app.http('leaderboard', {
       // No league exists yet (fresh install, before any league is created) — nothing to scope to.
       if (leagueId === null) {
         return { jsonBody: { entries: [], bestDeck: null } satisfies LeaderboardResponse };
+      }
+
+      const seasonIdParam = request.query.get('seasonId');
+      let seasonRange: { startsOn: string; endsOn: string | null } | undefined;
+      if (seasonIdParam !== null) {
+        const seasonId = Number(seasonIdParam);
+        if (!Number.isInteger(seasonId)) return { status: 400, jsonBody: { error: 'Invalid seasonId.' } };
+        const found = (
+          await db
+            .select({ startsOn: seasons.startsOn, endsOn: seasons.endsOn, leagueId: seasons.leagueId })
+            .from(seasons)
+            .where(eq(seasons.id, seasonId))
+        )[0];
+        // Treat "wrong league" the same as "doesn't exist" — a season id that belongs to
+        // a different league is not a valid scope for this request's leagueId.
+        if (!found || found.leagueId !== leagueId) return { status: 404, jsonBody: { error: 'Season not found.' } };
+        seasonRange = found;
       }
 
       const scopeFilter = and(

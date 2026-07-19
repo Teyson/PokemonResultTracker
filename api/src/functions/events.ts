@@ -144,7 +144,7 @@ app.http('events', {
             createdBy: creator.id
           });
         const row = await loadOne(db, inserted[0].id);
-        await logAudit(db, user, 'event.create', `Created "${name || playedOn}"`, context);
+        await logAudit(db, user, 'event.create', `Created event "${name || playedOn}"`, context);
         return { status: 201, jsonBody: toResponse(row!) };
       }
 
@@ -171,7 +171,7 @@ app.http('events', {
           .update(events)
           .set({ name: name || null, playedOn, bestOf: bestOf ?? 1, roundLengthMin: roundLengthMin ?? 30, leagueId })
           .where(eq(events.id, id));
-        await logAudit(db, user, 'event.update', `Updated "${existing.name || existing.playedOn}"`, context);
+        await logAudit(db, user, 'event.update', `Updated event "${existing.name || existing.playedOn}"`, context);
         const row = await loadOne(db, id);
         return { jsonBody: toResponse(row!) };
       }
@@ -181,7 +181,7 @@ app.http('events', {
           return { status: 400, jsonBody: { error: `Can't start an event that is already ${existing.status}.` } };
         }
         await db.update(events).set({ status: 'live' }).where(eq(events.id, id));
-        await logAudit(db, user, 'event.start', `Started "${existing.name || existing.playedOn}"`, context);
+        await logAudit(db, user, 'event.start', `Started event "${existing.name || existing.playedOn}"`, context);
         const row = await loadOne(db, id);
         return { jsonBody: toResponse(row!) };
       }
@@ -191,7 +191,7 @@ app.http('events', {
           return { status: 400, jsonBody: { error: `Can't finish an event that is ${existing.status}, not live.` } };
         }
         await db.update(events).set({ status: 'done' }).where(eq(events.id, id));
-        await logAudit(db, user, 'event.finish', `Finished "${existing.name || existing.playedOn}"`, context);
+        await logAudit(db, user, 'event.finish', `Finished event "${existing.name || existing.playedOn}"`, context);
         const row = await loadOne(db, id);
         return { jsonBody: toResponse(row!) };
       }
@@ -201,7 +201,7 @@ app.http('events', {
           return { status: 400, jsonBody: { error: "Only an event still in setup can be deleted — it already has history." } };
         }
         await db.delete(events).where(eq(events.id, id));
-        await logAudit(db, user, 'event.delete', `Deleted "${existing.name || existing.playedOn}"`, context);
+        await logAudit(db, user, 'event.delete', `Deleted event "${existing.name || existing.playedOn}"`, context);
         return { status: 204 };
       }
 

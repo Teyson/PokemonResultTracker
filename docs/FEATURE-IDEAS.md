@@ -1289,13 +1289,34 @@ attendance gives one player a bye, which counts as a win but is excluded from
 tiebreakers; match points are W/T/L = 3/1/0; tiebreakers are opponents' win %
 then opponents' opponents' win %; League Challenges are best-of-1 (~30-min
 rounds), 3–5 Swiss rounds, no top cut, while Cups add a best-of-3 top cut
-(~50-min). Crucially, **an unsanctioned private league — this app's case —
-is not required to use any of this**: that's why 43 builds pairing into the
-app itself, and 51 covers importing a `.tdf` for the nights someone *does*
-run under TOM.
+(~50-min).
 
-Dependency spine: **39 → 40 → 43 → 45 → 50** is the minimum path to "run a
-whole night in the app"; everything else in the section hangs off it.
+**Tuesday League is itself a sanctioned Play! Pokémon event** — confirmed by
+the user, July 2026. That settles the question the paragraph above used to
+leave open: TOM, not this app, must do the pairing, full stop. **Idea 43
+(in-app Swiss pairing) is therefore not usable for real Tuesday League
+nights** — it stays in this file only as groundwork for a hypothetical
+unsanctioned use case, not as something to prioritize.
+
+**Decided against reconciling with TOM at all (user, July 2026).** Idea 51
+(`.tdf` import) was considered and rejected outright — the user wants to
+**trust self-reported results**, never checked against what TOM says
+happened. Idea 81 (per-round `pairings.html` upload + a TO-facing reported
+results view) was *not* rejected — the user asked for exactly those two
+mechanics, just inverted: instead of self-reports being a provisional
+layer under 51's authoritative import, they're read into TOM by the TO's
+own hand, and separately become the app's own `nights` rows directly, no
+import round-trip either direction. **Idea 82 is the actual plan** and now
+contains that merged design. Ideas 40, 43, 44, 45, 46, 47, 48, 49, and 51
+solve problems this design doesn't have (an in-app pairing authority,
+both-player confirmation, live standings, writing into TOM) — they stay in
+this file for the record and for the hypothetical unsanctioned case, but
+**82 is what to build**.
+
+Dependency spine for a TOM-run night: **39 → 82**, on top of idea 1's
+existing per-match schema. The other spines in this section
+(`39 → 40 → 43 → 45 → 50` for in-app pairing; `39 → 40 → 41 → 51 → 50` for
+`.tdf` import) are not the plan for Tuesday League.
 
 ### 39. League events — the shared night entity
 
@@ -1312,8 +1333,8 @@ reporting all need one shared row to hang off.
   derives "League night 2026-08-19" when absent, `playedOn date not null`,
   `bestOf int not null default 1`, `roundLengthMin int not null default 30`,
   `status nvarchar(10) not null default 'setup'` — `'setup' | 'live' |
-  'done'`, `createdBy int` FK → `users.id`, `createdAt`). Generate a
-  migration per CLAUDE.md.
+  'done'`, `leagueId int` FK → `leagues.id`, `createdBy int` FK →
+  `users.id`, `createdAt`). Generate a migration per CLAUDE.md.
 - API: new `api/src/functions/events.ts` — GET list (member; lean rows) and
   GET detail `?id=` (member; event + roster + rounds/matches once 40/43
   exist); POST/PUT/DELETE gated on `isLeagueAdmin`. Status transitions
@@ -1325,12 +1346,24 @@ reporting all need one shared row to hang off.
 - Audit: log `event.create` / `event.finish` via `logAudit` — these are
   league-admin actions worth a trail.
 
-**Effort:** M–L. **Depends on:** 36 (the role that operates it). Everything
-40–56 depends on this.
+**Effort:** M–L. **Depends on:** 36 (the role that operates it), as
+originally written — **but see correction below.**
 **Pitfalls.** Don't FK events to seasons — derive season membership from
 `playedOn` at read time, exactly like nights (idea 9's no-FK design). Keep the
 GET-detail payload one request (roster + matches included) so the polling
 views (44, 47) are a single fetch.
+
+> **Correction (user, July 2026), for building idea 82:** this entry
+> predates idea 79 (leagues), so its schema above has been updated to add
+> `leagueId` — an event belongs to a specific league, same as nights and
+> seasons already do. More importantly: **drop the dependency on idea 36.**
+> Neither 36 nor `events` is built yet, and idea 79 already established the
+> precedent for this exact situation — its own admin actions are gated on
+> plain `isAdmin` with a note that `isLeagueAdmin` doesn't exist yet. Do
+> the same here: gate `events` (and idea 82's `pairings-html`
+> upload/dashboard/end-event) on `isAdmin`, not a new role tier. Idea 36
+> can be layered in later, if ever, without touching this design — it only
+> changes *who* is allowed to call these endpoints, not their shape.
 
 ### 40. Event roster & check-in
 
@@ -1618,6 +1651,21 @@ rows (a bye is not a played match and would inflate matchup/Elo data) — but
 the night's W/T/L totals then differ from event match points; pick "played
 matches only" for personal stats and document it in the bridge.
 
+> **Correction (user, July 2026): the pitfall above is wrong, don't follow
+> it.** It assumed recording a bye as a `matches` row would corrupt
+> matchup/Elo data, without checking the actual code. It doesn't: opponent
+> decks are already optional on `matches` (idea 2), and every consumer that
+> aggregates by opponent deck already null-checks it —
+> `decks.ts` filters with `isNotNull(matches.opponentDeckId)` before
+> grouping, and `elo.ts` does `if (!m.opponentDeck) continue`. A bye
+> recorded as an ordinary `result='W'` match with `opponentDeckId = null`
+> is *already* excluded from matchup-matrix and Elo by existing code, with
+> zero changes needed — so there was never a real conflict to trade away.
+> The user's explicit instruction: **this app's stats must match TOM's
+> exactly** — a bye counts as a win here precisely because it counts as a
+> win in TOM. See idea 82, which corrects this same mistake it had
+> inherited from this entry.
+
 ### 49. Round timer
 
 **What.** Pairing a round stamps its start time; every pairings board shows
@@ -1855,6 +1903,242 @@ logic as #31.
 them by guest name in per-event results but exclude from the season race (or
 include by name); decide and label. Derivation means an edited old event
 reshuffles the race — same self-correcting stance as #33.
+
+### 81. Live pairings & self-reported results around a TOM-run night
+
+> Raised by the user, July 2026: "TO uploads the HTML pairings file to the
+> page and it's parsed and pairings 'sent out'; people log their game on the
+> page, which the TO can see and manually type into TOM." Originally recorded
+> as a bounded complement to 51 (this idea's self-reports were provisional,
+> 51's `.tdf` import was the only thing authoritative).
+>
+> **Status: merged into 82.** The user rejected 51 (no `.tdf`, ever) but
+> then asked for exactly this idea's two live mechanics — the
+> `pairings.html` upload and a TO-facing reported-results view — back on top
+> of 82's trust model, with self-reports read straight into TOM by the TO
+> rather than checked against it. That merged design now lives in **82**;
+> this entry stays only as the original proposal for the record.
+
+### 82. Trust-based live match logging for a TOM-run night
+
+> The chosen plan (user, July 2026). Rejects 51 outright — no `.tdf`
+> import, ever, no reconciling the app's data against what TOM says
+> happened. But it does absorb 81's two live mechanics on request: a
+> `pairings.html` upload so players see "who am I playing," and a
+> TO-facing view of results reported so far. The inversion from 81 is
+> what makes this "trust-based" rather than "provisional": self-reports
+> aren't a stand-in for a later authoritative import, they're what the TO
+> themselves reads off the app and types into TOM by hand. The app never
+> reads anything back out of TOM.
+
+**What.** The player-facing flow (user, July 2026), grounded against the
+actual schema below:
+
+1. **Sign up.** A member opens the live event and picks the deck they're
+   playing tonight — "League mode." This *is* the signup: it immediately
+   creates their real `nights` row (`deckId` = the chosen deck, `eventId`
+   set, `wins`/`ties`/`losses` starting at 0, `isLeagueNight = true`,
+   `leagueId` from the event) rather than a separate roster entry that gets
+   converted later.
+2. **Pairings out.** Per round, the TO uploads the `pairings.html` file TOM
+   already writes to disk (see the section intro). The app parses it,
+   matches each TOM name against **tonight's signed-up players only** (a
+   much smaller, self-selected set than the whole membership — the fuzzy
+   name-matching problem idea 51 worried about shrinks a lot here), and
+   shows each signed-up member "who am I playing, what table" for that
+   round — or, for a player with a **bye** that round (TOM represents this
+   as a single unpaired player, per the `.tdf` research note; assume
+   `pairings.html` does something equivalent until verified against a real
+   file), "bye this round — counted as a win," with the win recorded
+   automatically the moment the upload is parsed (nothing for the player
+   to report; there's no game and no result to choose — see How for why
+   this is a real `matches` row like any other win). No manual reload
+   needed — this view polls on an interval while the event is live, same
+   pattern as every other "live" idea in this section (per the intro's "no
+   timers, no push" decision).
+3. **Report the match, same view as the pairing.** Once the match finishes,
+   the player logs W/T/L and whether they went first (idea 4's existing
+   `wentFirst` field — already shipped, no new schema) right there. If the
+   opponent is also signed up and was matched from the same round's
+   pairings, their **registered deck pre-fills `opponentDeckId`**
+   (editable); otherwise it's the same manual/free deck picker idea 2
+   already gives personal match logging (opponent decks aren't tied to a
+   person in the schema regardless — see How). This creates a normal
+   `matches` row against the player's own `nightId`.
+4. **The night updates itself.** `matches.nightId` is a required FK, and
+   `nights.wins/ties/losses` are already recomputed from `matches` on every
+   write (existing idea 1 behavior, see `api/src/db/schema.ts`). There is
+   **no separate end-of-night aggregation step** — the night has been
+   correct throughout. "The TO ends the tournament" is just
+   `events.status → 'done'`, which locks further match writes against it.
+5. **Results reach TOM by a human, not an API.** A TO-facing view lists
+   these self-reports grouped by table/round as they come in, so the TO
+   reads down it and types each result into TOM directly — faster than
+   walking the room, but still their hand doing the typing; there is no
+   TOM API to write to, and the app never reads a `.tdf` or anything else
+   back out of TOM to check itself.
+
+Members who never open League mode are entirely unaffected — no
+`eventId`-tagged `nights` row is ever created for them, no roster gap, no
+partial-data warning; they keep logging their own night manually afterward
+exactly as today.
+
+**Why.** The user's explicit call: don't reconcile against TOM in any
+form — trust whatever players report, and let that same trusted data serve
+double duty as "what the TO types into TOM" and "this player's actual
+`nights` row," live, with no separate import or bridge step. That removes
+most of what makes 39–51 heavyweight — an in-app pairing *authority* (43),
+both-player confirmation (46), disputes, live standings (47),
+byes/drops/round timers (48, 49) — the app only ever displays TOM's own
+pairings and collects one-sided reports; it never decides who plays whom or
+adjudicates a result.
+
+**How.**
+- Schema: add a nullable `eventId int` FK → `events.id` **on `nights`**
+  (not `matches` — matches already roll up through `nightId`, so tagging
+  the night is what matters). A unique constraint on
+  (`ownerId`, `eventId`) where `eventId is not null` stops a player
+  double-signing-up for the same event; re-opening League mode with a
+  different deck should update that existing night's `deckId`, not create
+  a second one. `events` stays the lightweight shell idea 39 defines (id,
+  name, playedOn, status `setup|live|done`) — **not** its roster (40),
+  pairing (43), or confirmation (46) machinery.
+- Deck pre-fill needs no schema change: `matches.opponentDeckId` already
+  points at the shared `decks` registry (owned or reference-only, per its
+  existing comment), and `nights.deckId` already says what any given
+  signed-up player is playing — the pre-fill is just "look up the other
+  signed-up player's `nights.deckId` for this event," a read, not a new
+  relationship.
+- Pairings upload: `POST /api/events/{id}/pairings-html` (league admin) —
+  Zod size cap, server-side HTML parse (a small, well-scoped parser, not
+  regex — format is TOM-internal wall-display markup with **no
+  documentation or known parser project**, unlike the `.tdf`; closest prior
+  art is `FomTarro/pkmn-tournament-overlay-tool`, which does consume TOM's
+  per-round HTML reports). Verify structure against a real file from this
+  league's own TOM before trusting it. Stores that round's table/name
+  assignments (a small `event_round_pairings`-shaped table, or just enough
+  to render the board) and resolves each name against tonight's
+  `eventId`-tagged nights — first-sight matches are a suggestion UI like
+  51's, subsequent rounds reuse the resolution.
+- **A bye is a normal win `matches` row — this app's stats must match
+  TOM's exactly (user, July 2026), full stop.** Earlier notes here and in
+  idea 48 said byes should *not* become `matches` rows, reasoning that it
+  would corrupt matchup-matrix/Elo/opponent win-rate data. **That reasoning
+  was wrong and both entries have been corrected** — it assumed a bye's
+  lack of an opponent deck was a problem without checking the code. It
+  isn't: `matches.opponentDeckId` is already nullable (idea 2 made opponent
+  decks optional), and every consumer that aggregates by opponent deck
+  already null-checks it — `decks.ts` filters with
+  `isNotNull(matches.opponentDeckId)`, `elo.ts` does
+  `if (!m.opponentDeck) continue`. So the moment `pairings-html` parsing
+  recognizes a signed-up player's bye, the server creates their `matches`
+  row immediately — `result='W'`, `roundNo` = that round, `opponentDeckId
+  = null`, `wentFirst = null` — same table, same write path as a
+  self-reported win, with **zero changes needed** to matchup-matrix, Elo,
+  or opponent win-rate code, since they already skip null-opponent-deck
+  matches. The player's personal `nights` win count for the night now
+  matches their TOM match points exactly, byes included.
+- **A bye's row and a real match with an unrecorded opponent deck are the
+  same shape (`opponentDeckId = null`) — that's fine, but only for
+  stats, not display.** A player facing a non-app opponent can freely
+  leave the deck field blank when self-reporting (idea 2's existing
+  optional-opponent-deck behavior, unrelated to byes) without it being
+  mistaken for a bye — the two are never confused at write time, since a
+  bye is always server-created straight from parsing `pairings-html` and a
+  self-report is always player-submitted through the log form; a form
+  submission never triggers bye logic no matter what's left blank.
+  Numerically identical treatment downstream is intentional (both are
+  correctly excluded from opponent-based stats and correctly counted as a
+  win). But if a future history view wants to *label* a round "bye" rather
+  than "win, deck unknown," that label can't be read off the `matches` row
+  itself — derive it from that round's parsed pairing record (already
+  persisted per the bullet above) showing whether this player had no
+  opponent assigned that round.
+- **The TO playing in the tournament needs no special handling.** Being a
+  signed-up player (League mode, a `nights` row) and holding admin
+  permissions (`isAdmin` — see idea 39's correction: gate on this, not
+  the unbuilt idea 36 role) are already orthogonal — nothing here assumes
+  one person can't be both, and a playing TO's own matches go through the
+  exact same self-report/bye path as anyone else's. The one deliberate
+  design choice: gate the admin-only actions (`pairings-html` upload, the
+  TO dashboard, ending the event) on **any** admin, not on the event's
+  creator or a single designated owner — `isAdmin` is already a plain
+  per-user flag, not a singleton, so a second admin/helper can carry the
+  live dashboard and relay results into TOM on a night the primary TO is
+  deep in their own match, with zero app changes. Only the `pairings-html`
+  export itself is stuck with whoever's at the TOM laptop, same as it
+  would be either way. (If a real distinction between "site admin" and
+  "runs Tuesday nights" ever matters, that's what idea 36 is for later —
+  not a blocker now.)
+- `GET /api/events/{id}/live` (any member) — current round's pairings plus
+  self-reports so far. Same data powers the member-facing "who am I
+  playing + log this match" combined view and the TO-facing table-by-table
+  reported/pending view; the TO view is this endpoint's data with
+  opponent+result columns shown, not a separate authoritative source.
+- Event finish: `PUT /api/events/{id}` with `status='done'` (league admin)
+  — locks further match/signup writes against the event. As part of the
+  same handler, **delete any `eventId`-tagged night with zero matches**
+  (signed up, never reported) rather than leaving a phantom 0-0-0 row —
+  decided explicitly rather than defaulted, since a real 0-loss night and
+  an abandoned signup would otherwise look identical everywhere else in
+  the app (Scoreboard, streaks, attendance heatmap).
+- Frontend: "League mode" entry point on the live event — deck picker,
+  then the combined pairing/report view described above, polling while
+  live; TO-facing table-by-table reported/pending list; league admin gets
+  "end event."
+
+**Effort:** L (the `pairings.html` parsing carries real complexity — same
+class as 51's `.tdf` work, aimed at a different, even-less-documented
+file). **Depends on:** 39 (built per its correction — `isAdmin`-gated, not
+36; `leagueId` added), idea 1's existing per-match/per-night schema, idea
+4's existing `wentFirst` field. Idea 39 is the only unbuilt prerequisite —
+1, 2, and 4 are already shipped (PRs #11, #15, #19). Explicitly does **not**
+depend on 36, 37, 38, 40, 43, 44 (this idea's own pairings board replaces
+it), 45, 46, 47, 48, 49, or 51.
+**Pitfalls.** This is a one-way aid, not a TOM integration — there is no
+API to write results into TOM, so the TO's manual entry is not eliminated,
+only made faster to locate; don't let the UI imply results "go straight
+into TOM." The TO must remember to upload a new `pairings.html` each round
+(no file-watching — managed Functions are HTTP-only, per the section
+intro); a stale round should say so ("round N, uploaded Hh ago"), not
+silently look current, and the combined report view must still work with
+no pairing uploaded at all (opponent typed in free text, same as today's
+personal logging) so a round the TO forgot to upload never blocks anyone
+from reporting. A match belongs to exactly one reporting player — there is
+deliberately no attempt to reconcile it with the opponent's own report even
+if the opponent is also signed up; that cross-check is the thing this
+design trades away on purpose, so don't quietly reintroduce it later
+without the user re-deciding — the deck pre-fill is a convenience default,
+not a shared record between the two sides' match rows. The `done`
+transition (including its zero-match cleanup) must be idempotent — running
+it twice must not error or double-delete. (A player whose only round that
+night was a bye is *not* swept up by the zero-match cleanup — their bye
+already wrote a real `matches` row per the correction above, so their
+night correctly survives with a single win on it.) Because participation is
+self-service and untracked beyond who actually signed up, there's no way
+to tell "this member skipped league night" from "this member played but
+never opened League mode" — don't build any UI that implies otherwise, and
+the TO dashboard is always a partial view of the room, never assume it's
+exhaustive.
+
+**Two behavior guarantees worth stating explicitly (user, July 2026), since
+they're easy to accidentally break later:**
+- **Nothing here lives in client/session state.** Signup, pairings, and
+  every self-report are DB writes the instant they happen — a player (or
+  the TO) closing the tab, switching devices, or coming back next round
+  re-fetches from `GET /api/events/{id}/live` plus their own night and
+  sees exactly where they left off. Don't reach for `localStorage`/session
+  storage for any of this, even as a convenience cache — it's unnecessary
+  and would reintroduce a way to "lose your spot" that the DB-backed
+  design doesn't otherwise have.
+- **Round advancement in TOM is never gated on this app.** Uploading round
+  N+1's `pairings.html` must stay a plain independent write, never checked
+  against whether round N's matches were all self-reported. A pairing
+  nobody reports (players told the TO verbally instead) simply never
+  becomes a `matches` row for either side — no error, nothing blocks,
+  TOM's own progress is unaffected. Don't add a "round complete" gate here
+  even if it looks like data hygiene; partial coverage is the expected
+  steady state, not an error condition.
 
 ### 56. Projector & kiosk mode
 

@@ -73,6 +73,7 @@
       {/if}
       <a class="item" href="/" onclick={navigate}>Tracker</a>
       <a class="item" href="/leaderboard" onclick={navigate}>Leaderboard</a>
+      <a class="item" href="/events" onclick={navigate}>Events</a>
       {#if isAdmin}
         <div class="divider">Admin</div>
         <a class="item admin" href="/admin" onclick={navigate}>Manage users</a>

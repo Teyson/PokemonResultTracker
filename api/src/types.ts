@@ -81,6 +81,25 @@ export interface LeagueResponse {
   archivedAt: string | null;
 }
 
+/**
+ * A league night as a shared event — the entity pairings/check-in/live
+ * results (future ideas) hang off. name is null when the UI should derive
+ * "League night <playedOn>". status moves setup -> live -> done.
+ */
+export interface EventResponse {
+  id: string;
+  name: string | null;
+  playedOn: string;
+  bestOf: number;
+  roundLengthMin: number;
+  status: 'setup' | 'live' | 'done';
+  leagueId: string;
+  createdBy: string;
+  // The creator's alias if set, else the same value as createdBy.
+  createdByDisplay: string;
+  createdAt: string;
+}
+
 /** One player's season totals for the leaderboard — league nights only, never per-night detail. */
 export interface LeaderboardEntryResponse {
   login: string;

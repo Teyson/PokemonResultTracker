@@ -1,4 +1,4 @@
-import type { HttpRequest, InvocationContext } from '@azure/functions';
+import type { HttpRequest, InvocationContext, HttpResponseInit } from '@azure/functions';
 import { eq, sql } from 'drizzle-orm';
 import { getDb } from './db/client';
 import { allowedUsers } from './db/schema';
@@ -25,7 +25,7 @@ export function getUser(request: HttpRequest): ClientPrincipal | null {
   }
 }
 
-type Db = Awaited<ReturnType<typeof getDb>>;
+export type Db = Awaited<ReturnType<typeof getDb>>;
 
 export interface Role {
   isAdmin: boolean;
@@ -97,4 +97,34 @@ export async function resolveRole(db: Db, userId: string, userDetailsRaw: string
   }
 
   return role;
+}
+
+export interface AuthContext {
+  user: ClientPrincipal;
+  db: Db;
+  isAdmin: boolean;
+  isMember: boolean;
+}
+
+/**
+ * Shared entry sequence for every Function handler: decode the principal,
+ * open the DB, and resolve the caller's role — or a ready-to-return 401 if
+ * there's no principal at all. Each handler still applies its own 403 gate
+ * afterward (isAdmin-only, isMember-only, or neither for /api/me's GET),
+ * since that varies per route.
+ *
+ * Callers must narrow the result with `if (!('isMember' in auth)) return auth;`
+ * — not `'status' in auth`. HttpResponseInit.status is optional, so a type
+ * guard keyed on it can't soundly rule out AuthContext in the else branch
+ * (TS keeps the union rather than risk excluding a valid statusless
+ * HttpResponseInit); isMember is required on AuthContext and absent from
+ * HttpResponseInit, so it discriminates cleanly both ways.
+ */
+export async function authenticate(request: HttpRequest, context: InvocationContext): Promise<AuthContext | HttpResponseInit> {
+  const user = getUser(request);
+  if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
+
+  const db = await getDb();
+  const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+  return { user, db, isAdmin, isMember };
 }

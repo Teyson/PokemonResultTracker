@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../db/client';
 import { seasons, leagues } from '../db/schema';
 import { logAudit } from '../db/auditLog';
-import { getUser, resolveRole } from '../auth';
+import { authenticate } from '../auth';
 import type { SeasonResponse } from '../types';
 
 /**
@@ -75,11 +75,9 @@ app.http('seasons', {
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     const idParam = request.params.id;
     try {
-      const user = getUser(request);
-      if (!user) return { status: 401, jsonBody: { error: 'Unauthorized.' } };
-
-      const db = await getDb();
-      const { isAdmin, isMember } = await resolveRole(db, user.userId, user.userDetails, context);
+      const auth = await authenticate(request, context);
+      if (!('isMember' in auth)) return auth;
+      const { user, db, isAdmin, isMember } = auth;
       if (!isMember) return { status: 403, jsonBody: { error: 'You do not have access to this app.' } };
 
       if (request.method === 'GET') {

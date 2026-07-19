@@ -2503,6 +2503,14 @@ as a trend.
 
 ### 77. Community-standard win rates (ties as ⅓)
 
+> **Status: implemented in PR #59.** `scorePct` in `src/lib/pokemon.ts` already
+> computed exactly this formula (it's how `PPG / 3` was derived) — every
+> percentage display (`DeckTable`'s matchup/opponent-type cells, the
+> leaderboard) already routed through it, so the change was a doc/label pass:
+> the docstring now states the community-convention equivalence explicitly,
+> and a `title` tooltip ("ties count as ⅓ win…") was added to each "Score%"
+> header rather than a per-cell label.
+
 **What.** Wherever the app shows a win percentage, adopt the community
 convention Trainer Hill defaults to: a tie counts as a third of a win,
 `(W + T/3) / (W + L + T)`.
@@ -2571,6 +2579,32 @@ doesn't either pollute the Tuesday standings or vanish into the undifferentiated
 "casual" bucket.
 
 ### 79. Leagues — named competitive contexts
+
+> **Status: implemented in PR #59**, matching this idea's scoping as written:
+> `leagues` table + nullable `nights.leagueId`, seeded with "Spilforsyningen
+> Tirsdag" and backfilled from `is_league_night` via a two-migration pair
+> (DDL then a hand-written `--custom` data migration), verified against a
+> pre-migration Docker snapshot and confirmed idempotent on re-run.
+> `api/src/functions/leagues.ts` mirrors `seasons.ts` (GET member;
+> POST/PUT/archive/unarchive admin-only for now — `isLeagueAdmin` doesn't
+> exist yet); the default league (lowest unarchived id) can't be archived.
+> `api/src/db/leagues.ts` holds the single write-path mapping
+> (`resolveNightLeagueId`) nights.ts uses on every POST/PUT so
+> `isLeagueNight`/`leagueId` can't drift. `leaderboard.ts` takes `?leagueId=`
+> (defaulting to the default league) but the frontend leaderboard page
+> doesn't call it with one yet — awards/hall-of-fame/leaderboard stay
+> Spilforsyningen-Tirsdag-only in this PR, deliberately, per #80. The nav
+> selector (`NavMenu.svelte` + `src/lib/league.svelte.ts`, a shared
+> `$state`/localStorage store like `theme.svelte.ts`) only renders once a
+> second league exists. `NightForm`'s League/Casual toggle labels itself with
+> the active league's name once >1 exists; edit mode binds to the night's own
+> `leagueId` (not the nav's active one) unless the user explicitly clicks the
+> toggle, verified by editing a Summer Cup night while Tuesday was active in
+> the nav and confirming the PUT body kept `leagueId: "2"`. The main page
+> filters Scoreboard/DeckTable/NightsList to casual + the active league,
+> composing with the season filter; Records/Badges/CalendarHeatmap stay
+> unfiltered (lifetime views). A "N nights in other leagues" hint with
+> per-league switch links appears under NightsList when nights are hidden.
 
 **What.** A `leagues` registry ("Tuesday League", "Summer Cup 2026", …) that a
 night belongs to, replacing the binary league/casual split with

@@ -17,6 +17,8 @@ export interface Night {
   l: number;
   notes: string | null;
   isLeagueNight: boolean;
+  // Which named league this night belongs to; null for casual nights.
+  leagueId: string | null;
   createdBy: string;
   // The owner's alias if set, else the same value as createdBy. Use this
   // (not createdBy) whenever the owner's name is shown to other players.
@@ -34,6 +36,9 @@ export interface NightInput {
   t: number;
   l: number;
   isLeagueNight: boolean;
+  // The league to log a league night into. Omitted/undefined defaults to the
+  // active league server-side; ignored when isLeagueNight is false.
+  leagueId?: string | null;
   matches?: {
     result: 'W' | 'T' | 'L';
     opponentDeckId?: string;
@@ -81,6 +86,13 @@ export interface Season {
   name: string;
   startsOn: string;
   endsOn: string | null;
+}
+
+/** A named competitive context, e.g. "Tuesday League". archivedAt null means active (visible in pickers). */
+export interface League {
+  id: string;
+  name: string;
+  archivedAt: string | null;
 }
 
 /** One player's season totals for the leaderboard — league nights only, no per-night detail. */

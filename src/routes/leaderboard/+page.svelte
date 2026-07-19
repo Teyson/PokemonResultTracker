@@ -243,7 +243,7 @@
             <div class="ltable">
               <div class="lrow head">
                 <span>#</span><span>Player</span><span>Record</span><span>Games</span><span>Pts</span><span>PPG</span
-                ><span>Score%</span>
+                ><span title="Ties count as ⅓ win, matching PPG and community convention">Score%</span>
               </div>
               {#each ranked as e, i (e.login)}
                 {@const g = games(e)}

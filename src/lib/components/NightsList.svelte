@@ -1,6 +1,15 @@
 <script lang="ts">
   import type { Night } from '$lib/types';
   import { colorOf, pts, ppg, fmtDate } from '$lib/pokemon';
+  import { leagueState } from '$lib/league.svelte';
+
+  // Only worth naming the league once more than one exists — otherwise every
+  // league night is obviously "the" league and the generic label reads cleaner.
+  function leagueLabel(n: Night): string {
+    if (!n.isLeagueNight) return 'Casual';
+    if (leagueState.leagues.length <= 1) return 'League';
+    return leagueState.leagues.find((l) => l.id === n.leagueId)?.name ?? 'League';
+  }
 
   let {
     nights,
@@ -57,7 +66,7 @@
             <div class="top">
               <span class="deck">{n.deck}</span>
               <span class="chip" style="background:{colorOf(n.type)}22;color:{colorOf(n.type)}">{n.type}</span>
-              <span class="chip nighttype" class:casual={!n.isLeagueNight}>{n.isLeagueNight ? 'League' : 'Casual'}</span>
+              <span class="chip nighttype" class:casual={!n.isLeagueNight}>{leagueLabel(n)}</span>
             </div>
             <div class="date">
               {fmtDate(n.date)}

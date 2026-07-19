@@ -31,7 +31,11 @@ export function ppg(n: Pick<Night, 'w' | 't' | 'l'>): number {
   return g ? pts(n) / g : 0;
 }
 
-/** Score rate on the same 0-3 ppg scale used everywhere else in the app, expressed as a percent. */
+/**
+ * Score rate on the same 0-3 ppg scale used everywhere else in the app, expressed as a percent.
+ * Equivalent to the community-standard win rate (W + T/3) / (W + L + T) — ties count as a third
+ * of a win — so this stays in agreement with both PPG and how other trackers report win%.
+ */
 export function scorePct(n: Pick<Night, 'w' | 't' | 'l'>): number | null {
   const g = games(n);
   return g ? Math.round((pts(n) / (g * 3)) * 100) : null;

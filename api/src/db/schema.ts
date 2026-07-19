@@ -68,8 +68,15 @@ export const nights = mssqlTable('nights', {
   losses: int().notNull().default(0),
   notes: nvarchar({ length: 500 }),
   // League night (ranked/tracked play) vs casual night — defaults to league
-  // since that's the primary use case this app was built for.
+  // since that's the primary use case this app was built for. Kept in sync
+  // with leagueId (leagueId set <=> isLeagueNight = 1) by a single write-path
+  // mapping in nights.ts while both columns exist; isLeagueNight is dropped
+  // once every reader has migrated to leagueId.
   isLeagueNight: bit('is_league_night').notNull().default(sql`1`),
+  // Which named league (see `leagues`) this night belongs to. Null means
+  // casual. Nullable rather than a hard FK-required column so casual nights
+  // need no league at all.
+  leagueId: int('league_id').references(() => leagues.id),
   // Owner: a foreign key into users. The display name comes from the joined
   // users row, so it always reflects the owner's current GitHub login.
   ownerId: int('owner_id')
@@ -122,6 +129,23 @@ export const seasons = mssqlTable('seasons', {
   name: nvarchar({ length: 100 }).notNull(),
   startsOn: date('starts_on', { mode: 'string' }).notNull(),
   endsOn: date('ends_on', { mode: 'string' }),
+  createdAt: datetime2('created_at', { mode: 'date' })
+    .notNull()
+    .default(sql`SYSUTCDATETIME()`)
+});
+
+/**
+ * Named competitive contexts (e.g. "Tuesday League", "Summer Cup 2026"), each
+ * with its own standings — replaces the binary league/casual split on nights
+ * with casual | which league. Managed from /leagues. archivedAt hides a
+ * league from pickers (the #68 retirement pattern) without deleting its
+ * history; the default league (lowest unarchived id) anchors form defaults
+ * and can't be archived.
+ */
+export const leagues = mssqlTable('leagues', {
+  id: int().primaryKey().identity(),
+  name: nvarchar({ length: 100 }).notNull(),
+  archivedAt: datetime2('archived_at', { mode: 'date' }),
   createdAt: datetime2('created_at', { mode: 'date' })
     .notNull()
     .default(sql`SYSUTCDATETIME()`)

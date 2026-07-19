@@ -303,7 +303,10 @@
                       <button type="button" onclick={() => toggleMatchupSort('record')}
                         >Record{matchupSortArrow('record')}</button
                       >
-                      <button type="button" onclick={() => toggleMatchupSort('score')}
+                      <button
+                        type="button"
+                        title="Ties count as ⅓ win, matching PPG and community convention"
+                        onclick={() => toggleMatchupSort('score')}
                         >Score%{matchupSortArrow('score')}</button
                       >
                       <button type="button" onclick={() => toggleMatchupSort('ppg')}>PPG{matchupSortArrow('ppg')}</button>
@@ -356,7 +359,11 @@
                       <button type="button" onclick={() => toggleTypeSort('record')}
                         >Record{typeSortArrow('record')}</button
                       >
-                      <button type="button" onclick={() => toggleTypeSort('score')}>Score%{typeSortArrow('score')}</button>
+                      <button
+                        type="button"
+                        title="Ties count as ⅓ win, matching PPG and community convention"
+                        onclick={() => toggleTypeSort('score')}>Score%{typeSortArrow('score')}</button
+                      >
                       <button type="button" onclick={() => toggleTypeSort('ppg')}>PPG{typeSortArrow('ppg')}</button>
                     </div>
                     {#each opponentTypes as opp (opp.name)}
